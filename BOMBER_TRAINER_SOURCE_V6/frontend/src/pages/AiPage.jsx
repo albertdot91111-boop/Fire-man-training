@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell';
 import { useIntegratedAi } from '@/hooks/use-integrated-ai';
 import { buildUserContext } from '@/lib/btData';
 import { buildBomberAiContext, diagnoseBomberProgress } from '@/aiEngine';
+import { coachBrief } from '@/bomberCoach';
 
 const QUICK = ['Com vaig?', 'Què haig de millorar?', 'Què faig avui?', 'Quins punts febles tinc?'];
 
@@ -37,12 +38,21 @@ export default function AiPage() {
     useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
     const diagnosis = diagnoseBomberProgress(data.sessions);
+    const brief = coachBrief({ ...data, minutes: minutes || 45 });
 
     const ask = (text) => {
         if (!text.trim() || isStreaming) return;
         const userContext = buildUserContext({ ...data, minutes });
         const bomberContext = buildBomberAiContext({ ...data, minutes });
-        sendMessage(`${text}\n\n${userContext}\n\n${bomberContext}`);
+        const coachContext = [
+            '[BOMBER COACH — MOTOR DE DECISIÓ LOCAL]',
+            brief.text,
+            `Sessió proposada: ${brief.plan.blocks.join(' | ')}`,
+            `Material: ${brief.plan.materialUsed.join(', ')}`,
+            'Aquest motor és una capa de decisió de l’app; els barems indicats com inferits NO són oficials.',
+            '[FI BOMBER COACH]',
+        ].join('\n');
+        sendMessage(`${text}\n\n${userContext}\n\n${bomberContext}\n\n${coachContext}`);
         setInput('');
     };
 
@@ -54,7 +64,7 @@ export default function AiPage() {
             </Helmet>
 
             <div className="rounded-3xl p-5" style={{ backgroundColor: '#f3e8ff', borderLeft: '8px solid #7c3aed' }}>
-                <p className="text-xs font-bold tracking-widest text-purple-700">ASSISTENT IA</p>
+                <p className="text-xs font-bold tracking-widest text-purple-700">ASSISTENT IA + BOMBER COACH</p>
                 <p className="mt-1 text-sm font-medium text-slate-700">
                     Analitzo les teves {data.sessions.length} sessions registrades, el teu pes, objectius i material disponible
                     {minutes ? ` i els ${minutes} minuts que tens avui.` : '.'}
@@ -63,6 +73,30 @@ export default function AiPage() {
                     {diagnosis.priority ? `Prioritat actual: ${diagnosis.priority === 'aquatic' ? 'aquàtica' : diagnosis.priority === 'estructural' ? 'urbana / estructural' : 'forestal'}.` : 'Encara estic recollint dades per prioritzar.'}
                 </p>
             </div>
+
+            <section className="rounded-3xl border border-purple-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <p className="text-xs font-bold tracking-widest text-purple-600">DECISIÓ AUTOMÀTICA</p>
+                        <h2 className="mt-1 text-lg font-extrabold">{brief.plan.focus.title}</h2>
+                        <p className="mt-1 text-sm text-slate-600">{brief.plan.focus.reason}</p>
+                    </div>
+                    <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-700">{brief.plan.readiness}</span>
+                </div>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {brief.analysis.tests.filter((t) => t.latestGrade !== null).map((t) => (
+                        <div key={t.type} className="rounded-2xl bg-slate-50 p-3">
+                            <p className="text-xs font-bold text-slate-400">{t.label.toUpperCase()}</p>
+                            <p className="mt-1 text-lg font-extrabold">{Math.round(t.latestGrade * 10) / 10}/10</p>
+                            <p className="text-xs text-slate-500">millor {Math.round((t.bestGrade ?? 0) * 10) / 10}/10{t.inferred ? ' · barem inferit' : ''}</p>
+                        </div>
+                    ))}
+                </div>
+                {brief.plan.warnings.length > 0 && <div className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">{brief.plan.warnings.join(' ')}</div>}
+                <button type="button" onClick={() => ask(`Executa la sessió proposada pel Bomber Coach i adapta-la a ${minutes || 45} minuts.`)} disabled={isStreaming} className="mt-4 min-h-[46px] rounded-xl bg-purple-700 px-4 text-sm font-bold text-white disabled:opacity-60">
+                    Fer aquesta sessió amb la IA
+                </button>
+            </section>
 
             <div className="flex flex-wrap gap-2">
                 {QUICK.map((q) => (
