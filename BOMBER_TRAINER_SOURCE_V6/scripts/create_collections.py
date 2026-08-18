@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 1: create the 4 app collections in PocketBase exactly per DATABASE.md.
+"""Phase 1: create/update the 4 app collections in PocketBase.
 Idempotent: creates if missing, updates fields+rules if present.
 Only documented fields are used. `owner` is a relation to the users auth
 collection to enforce per-user ownership rules.
@@ -15,7 +15,7 @@ EMAIL = os.environ["PB_SUPERUSER_EMAIL"]
 PASSWORD = os.environ["PB_SUPERUSER_PASSWORD"]
 USERS_ID = "_pb_users_auth_"
 
-OWNER_RULE = "owner = @request.auth.id"
+OWNER_RULE = '@request.auth.id != "" && owner = @request.auth.id'
 
 
 def req(method, path, token=None, body=None):
@@ -114,8 +114,6 @@ def main():
                 print(json.dumps(res, indent=2))
                 sys.exit(1)
 
-    # Tighten users collection: each user only accesses their own record.
-    # Keep createRule public ("") so registration still works.
     users_rules = {
         "listRule": "id = @request.auth.id",
         "viewRule": "id = @request.auth.id",
