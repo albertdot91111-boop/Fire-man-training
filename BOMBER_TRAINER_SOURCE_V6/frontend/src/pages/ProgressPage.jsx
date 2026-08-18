@@ -10,10 +10,7 @@ function monthGrid(sessions) {
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const byDate = {};
-    sessions.forEach((s) => {
-        const key = String(s.date || '').slice(0, 10);
-        if (key) byDate[key] = s.type;
-    });
+    sessions.forEach((s) => { const key = String(s.date || '').slice(0, 10); if (key) byDate[key] = s.type; });
     const cells = [];
     for (let i = 0; i < (start.getDay() + 6) % 7; i += 1) cells.push(null);
     for (let d = 1; d <= days; d += 1) {
@@ -28,8 +25,7 @@ function legacyMinuteAware(value) {
     if (!text) return 0;
     if (text.includes(':')) {
         const [m, s = '0'] = text.split(':');
-        const minutes = Number(m);
-        const seconds = Number(s);
+        const minutes = Number(m), seconds = Number(s);
         return Number.isFinite(minutes) && Number.isFinite(seconds) ? minutes * 60 + seconds : 0;
     }
     const n = Number(text);
@@ -43,36 +39,27 @@ function numericSeconds(value) {
 }
 
 function sessionTotalSeconds(session) {
-    // New sessions store the total duration in minutes.
     const duration = numericSeconds(session?.duration);
     if (duration > 0) return duration * 60;
-
     const data = Array.isArray(session?.data) ? session.data : [];
     const complete = data.find((entry) => String(entry.exercici || '').toLowerCase().includes('circuit complet'));
     if (complete) {
         const total = numericSeconds(complete.temps);
         if (total > 0) return total < 20 ? total * 60 : total;
     }
-
-    const values = data.flatMap((entry) => {
+    return data.flatMap((entry) => {
         const value = entry?.temps;
         if (value === undefined || value === null || value === '') return [];
         return [typeof value === 'number' ? value : legacyMinuteAware(value)];
-    });
-    return values.reduce((sum, value) => sum + value, 0);
+    }).reduce((sum, value) => sum + value, 0);
 }
 
 function timeSeries(sessions, type) {
-    return sessions
-        .filter((s) => s.type === type)
-        .map((s) => ({
-            date: String(s.date || '').slice(5, 10),
-            fullDate: String(s.date || '').slice(0, 10),
-            seconds: sessionTotalSeconds(s),
-        }))
-        .filter((x) => x.seconds > 0)
-        .sort((a, b) => a.fullDate.localeCompare(b.fullDate))
-        .slice(-12);
+    return sessions.filter((s) => s.type === type).map((s) => ({
+        date: String(s.date || '').slice(5, 10),
+        fullDate: String(s.date || '').slice(0, 10),
+        seconds: sessionTotalSeconds(s),
+    })).filter((x) => x.seconds > 0).sort((a, b) => a.fullDate.localeCompare(b.fullDate)).slice(-12);
 }
 
 export default function ProgressPage() {
@@ -87,21 +74,36 @@ export default function ProgressPage() {
     const [goalCurrent, setGoalCurrent] = useState('');
 
     const load = async () => {
-        const owner = pb.authStore.record?.id;
-        if (!owner) return;
+        if (!pb.authStore.isValid || !pb.authStore.record?.id) {
+            setLoadError('La sessió d\'usuari encara no està carregada. Torna a obrir Progrés després d\'iniciar sessió.');
+            return;
+        }
         setLoadError('');
-        const ownerFilter = `owner = "${owner}"`;
         try {
-            setSessions(await pb.collection('bt_sessions').getFullList({ sort: '-date', filter: ownerFilter }));
+            // PocketBase API rules already filter records to the authenticated owner.
+            // Do not duplicate the owner filter here: this also avoids failures caused by
+            // a mismatched relation/text schema while keeping the server-side rule as the gate.
+            const [nextSessions, nextWeights, nextGoals] = await Promise.all([
+                pb.collection('bt_sessions').getFullList({ sort: '-date' }),
+                pb.collection('bt_weights').getFullList({ sort: '-date' }),
+                pb.collection('bt_goals').getFullList({ sort: '-created' }),
+            ]);
+            setSessions(nextSessions);
+            setWeights(nextWeights);
+            setGoals(nextGoals);
         } catch (err) {
             setSessions([]);
-            setLoadError('No puc llegir les sessions. A PocketBase, List i View de bt_sessions han de permetre @request.auth.id != "" && owner = @request.auth.id.');
+            const status = err?.status ? ` (${err.status})` : '';
+            const message = err?.response?.message || err?.message || 'error desconegut';
+            setLoadError(`No puc llegir les dades de Progrés${status}: ${message}`);
         }
-        try { setWeights(await pb.collection('bt_weights').getFullList({ sort: '-date', filter: ownerFilter })); } catch (err) { setWeights([]); }
-        try { setGoals(await pb.collection('bt_goals').getFullList({ sort: '-created', filter: ownerFilter })); } catch (err) { setGoals([]); }
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        load();
+        const unsubscribe = pb.authStore.onChange(() => { load(); });
+        return () => { unsubscribe?.(); };
+    }, []);
 
     const points = totalPoints(sessions);
     const cells = useMemo(() => monthGrid(sessions), [sessions]);
@@ -117,7 +119,7 @@ export default function ProgressPage() {
         try {
             await pb.collection('bt_weights').create({ date: today(), weight: Number(w) || 0, fat: Number(fat) || 0, owner: pb.authStore.record.id });
             setW(''); setFat(''); load();
-        } catch (err) { setLoadError(err?.message || 'No s\'ha pogut guardar el pes.'); }
+        } catch (err) { setLoadError(err?.response?.message || err?.message || 'No s\'ha pogut guardar el pes.'); }
     };
 
     const addGoal = async (e) => {
@@ -125,7 +127,7 @@ export default function ProgressPage() {
         try {
             await pb.collection('bt_goals').create({ title: goalTitle, target: Number(goalTarget) || 0, current: Number(goalCurrent) || 0, unit: '', owner: pb.authStore.record.id });
             setGoalTitle(''); setGoalTarget(''); setGoalCurrent(''); load();
-        } catch (err) { setLoadError(err?.message || 'No s\'ha pogut guardar l\'objectiu.'); }
+        } catch (err) { setLoadError(err?.response?.message || err?.message || 'No s\'ha pogut guardar l\'objectiu.'); }
     };
 
     const renderTimeProgress = (title, type, series, emptyText) => {
@@ -133,38 +135,8 @@ export default function ProgressPage() {
         const best = series.length ? Math.min(...series.map((x) => x.seconds)) : 0;
         const latestGrade = latest ? gradeForTime(type, latest.seconds) : null;
         const bestGrade = best ? gradeForTime(type, best) : null;
-        return (
-            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                    <div><h2 className="text-lg font-extrabold">{title}</h2><p className="mt-1 text-sm text-slate-500">Evolució del temps total. Com menys, millor.</p></div>
-                    {latest && <div className="text-right"><p className="text-xs font-bold text-slate-400">ÚLTIM</p><p className="text-xl font-extrabold">{formatTime(latest.seconds)}</p><p className="text-xs font-bold text-slate-600">{latestGrade ? `Nota aprox. ${latestGrade}` : 'Nota pendent de barem'}</p></div>}
-                </div>
-                {series.length ? (
-                    <>
-                        <div className="mt-4 grid grid-cols-2 gap-2">
-                            <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-bold text-slate-400">MILLOR TEMPS</p><p className="text-lg font-extrabold">{formatTime(best)}</p><p className="text-xs text-slate-500">{bestGrade ? `Nota aprox. ${bestGrade}` : 'Sense barem numèric'}</p></div>
-                            <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-bold text-slate-400">ÚLTIM</p><p className="text-lg font-extrabold">{formatTime(latest.seconds)}</p><p className="text-xs text-slate-500">{latest.fullDate}</p></div>
-                        </div>
-                        <div className="mt-4 h-48"><ResponsiveContainer width="100%" height="100%"><LineChart data={series}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="date" fontSize={12} /><YAxis tickFormatter={formatTime} fontSize={12} /><Tooltip formatter={(value) => [formatTime(value), 'Temps']} /><Line type="monotone" dataKey="seconds" name="Temps" stroke={TYPES[type].color} strokeWidth={3} dot /></LineChart></ResponsiveContainer></div>
-                    </>
-                ) : <p className="mt-4 text-sm text-slate-400">{emptyText}</p>}
-            </section>
-        );
+        return <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-extrabold">{title}</h2><p className="mt-1 text-sm text-slate-500">Evolució del temps total. Com menys, millor.</p></div>{latest && <div className="text-right"><p className="text-xs font-bold text-slate-400">ÚLTIM</p><p className="text-xl font-extrabold">{formatTime(latest.seconds)}</p><p className="text-xs font-bold text-slate-600">{latestGrade ? `Nota aprox. ${latestGrade}` : 'Nota pendent de barem'}</p></div>}</div>{series.length ? <><div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-bold text-slate-400">MILLOR TEMPS</p><p className="text-lg font-extrabold">{formatTime(best)}</p><p className="text-xs text-slate-500">{bestGrade ? `Nota aprox. ${bestGrade}` : 'Sense barem numèric'}</p></div><div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-bold text-slate-400">ÚLTIM</p><p className="text-lg font-extrabold">{formatTime(latest.seconds)}</p><p className="text-xs text-slate-500">{latest.fullDate}</p></div></div><div className="mt-4 h-48"><ResponsiveContainer width="100%" height="100%"><LineChart data={series}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="date" fontSize={12} /><YAxis tickFormatter={formatTime} fontSize={12} /><Tooltip formatter={(value) => [formatTime(value), 'Temps']} /><Line type="monotone" dataKey="seconds" name="Temps" stroke={TYPES[type].color} strokeWidth={3} dot /></LineChart></ResponsiveContainer></div></> : <p className="mt-4 text-sm text-slate-400">{emptyText}</p>}</section>;
     };
 
-    return (
-        <AppShell title="El meu progrés">
-            <Helmet><title>El meu progrés — BOMBER TRAINER</title><meta name="description" content="Millors marques, evolució de temps, gràfiques de pes corporal i objectius de l'opositor." /></Helmet>
-            {loadError && <div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{loadError}</div>}
-            <section className="grid grid-cols-3 gap-3">{[['Punts', points], ['Ratxa', `${streak(sessions)} d`], ['Nivell', levelFor(points).name]].map(([k, v]) => <div key={k} className="rounded-3xl bg-white border border-slate-200 p-4 text-center shadow-sm"><p className="text-xs font-bold tracking-widest text-slate-400">{k.toUpperCase()}</p><p className="mt-1 text-lg font-extrabold">{v}</p></div>)}</section>
-            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Calendari del mes</h2><div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-400">{['dl','dt','dc','dj','dv','ds','dg'].map((d) => <span key={d}>{d}</span>)}</div><div className="mt-1 grid grid-cols-7 gap-1">{cells.map((c, i) => <div key={c ? c.key : `e${i}`} className="flex h-10 items-center justify-center rounded-lg text-sm font-bold" style={{ backgroundColor: c?.type ? TYPES[c.type]?.soft || '#e2e8f0' : '#f8fafc', color: c?.type ? TYPES[c.type]?.color || '#475569' : '#94a3b8' }}>{c ? c.day : ''}</div>)}</div></section>
-            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Millors marques</h2><p className="mt-2 text-sm text-slate-600">Press banca: <strong>{bestBench || '—'} kg</strong></p><p className="text-sm text-slate-600">Sessions registrades: <strong>{sessions.length}</strong></p></section>
-            {renderTimeProgress('Incendi urbà / estructural', 'estructural', structuralTimes, 'Registra un incendi urbà per veure la progressió.')}
-            {renderTimeProgress('Incendi forestal', 'forestal', forestalTimes, 'Registra un incendi forestal per veure la progressió.')}
-            {renderTimeProgress('Prova aquàtica', 'aquatic', aquaticTimes, 'Registra una prova aquàtica per veure la progressió.')}
-            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Evolució de manteniment</h2><p className="mt-1 text-sm text-slate-500">Sèries registrades i volum total per sessió.</p><div className="mt-4 h-48">{maintenanceSeries.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={maintenanceSeries}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="date" fontSize={12} /><YAxis fontSize={12} /><Tooltip /><Line type="monotone" dataKey="total" name="Total" stroke="#ca8a04" strokeWidth={3} dot /></LineChart></ResponsiveContainer> : <p className="text-sm text-slate-400">Registra sèries com 15/15/12 per veure'n l'evolució.</p>}</div></section>
-            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Pes corporal</h2><form onSubmit={addWeight} className="mt-3 flex flex-wrap gap-2"><input required type="number" step="0.1" placeholder="Pes (kg)" value={w} onChange={(e) => setW(e.target.value)} className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-3" /><input type="number" step="0.1" placeholder="% greix" value={fat} onChange={(e) => setFat(e.target.value)} className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-3" /><button type="submit" className="min-h-[48px] rounded-xl bg-slate-900 px-5 font-bold text-white">Guardar</button></form>{weightSeries.length ? <div className="mt-4 h-48"><ResponsiveContainer width="100%" height="100%"><LineChart data={weightSeries}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="date" fontSize={12} /><YAxis domain={['dataMin - 2', 'dataMax + 2']} /><Tooltip /><Line type="monotone" dataKey="pes" stroke="#2563eb" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></div> : <p className="mt-4 text-sm text-slate-400">Registra el teu pes per veure l'evolució dels últims 30 dies.</p>}</section>
-            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Objectius</h2><form onSubmit={addGoal} className="mt-3 grid gap-2 sm:grid-cols-4"><input required placeholder="Press banca 65kg x20" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3 sm:col-span-2" /><input type="number" placeholder="Objectiu" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /><input type="number" placeholder="Actual" value={goalCurrent} onChange={(e) => setGoalCurrent(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /><button type="submit" className="min-h-[48px] rounded-xl bg-slate-900 font-bold text-white sm:col-span-4">Afegir objectiu</button></form><ul className="mt-4 space-y-3">{goals.length === 0 && <li className="text-sm text-slate-400">Cap objectiu establert.</li>}{goals.map((g) => { const pct = g.target ? Math.min(100, Math.round(((g.current || 0) / g.target) * 100)) : 0; return <li key={g.id}><div className="flex justify-between text-sm font-semibold"><span>{g.title}</span><span>{pct}%</span></div><div className="mt-1 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-green-600" style={{ width: `${pct}%` }} /></div></li>; })}</ul></section>
-        </AppShell>
-    );
+    return <AppShell title="El meu progrés"><Helmet><title>El meu progrés — BOMBER TRAINER</title><meta name="description" content="Millors marques, evolució de temps, gràfiques de pes corporal i objectius de l'opositor." /></Helmet>{loadError && <div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{loadError}</div>}<section className="grid grid-cols-3 gap-3">{[['Punts', points], ['Ratxa', `${streak(sessions)} d`], ['Nivell', levelFor(points).name]].map(([k, v]) => <div key={k} className="rounded-3xl bg-white border border-slate-200 p-4 text-center shadow-sm"><p className="text-xs font-bold tracking-widest text-slate-400">{k.toUpperCase()}</p><p className="mt-1 text-lg font-extrabold">{v}</p></div>)}</section><section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Calendari del mes</h2><div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-400">{['dl','dt','dc','dj','dv','ds','dg'].map((d) => <span key={d}>{d}</span>)}</div><div className="mt-1 grid grid-cols-7 gap-1">{cells.map((c, i) => <div key={c ? c.key : `e${i}`} className="flex h-10 items-center justify-center rounded-lg text-sm font-bold" style={{ backgroundColor: c?.type ? TYPES[c.type]?.soft || '#e2e8f0' : '#f8fafc', color: c?.type ? TYPES[c.type]?.color || '#475569' : '#94a3b8' }}>{c ? c.day : ''}</div>)}</div></section><section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Millors marques</h2><p className="mt-2 text-sm text-slate-600">Press banca: <strong>{bestBench || '—'} kg</strong></p><p className="text-sm text-slate-600">Sessions registrades: <strong>{sessions.length}</strong></p></section>{renderTimeProgress('Incendi urbà / estructural', 'estructural', structuralTimes, 'Registra un incendi urbà per veure la progressió.')}{renderTimeProgress('Incendi forestal', 'forestal', forestalTimes, 'Registra un incendi forestal per veure la progressió.')}{renderTimeProgress('Prova aquàtica', 'aquatic', aquaticTimes, 'Registra una prova aquàtica per veure la progressió.')}<section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Evolució de manteniment</h2><p className="mt-1 text-sm text-slate-500">Sèries registrades i volum total per sessió.</p><div className="mt-4 h-48">{maintenanceSeries.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={maintenanceSeries}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="date" fontSize={12} /><YAxis fontSize={12} /><Tooltip /><Line type="monotone" dataKey="total" name="Total" stroke="#ca8a04" strokeWidth={3} dot /></LineChart></ResponsiveContainer> : <p className="text-sm text-slate-400">Registra sèries com 15/15/12 per veure'n l'evolució.</p>}</div></section><section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Pes corporal</h2><form onSubmit={addWeight} className="mt-3 flex flex-wrap gap-2"><input required type="number" step="0.1" placeholder="Pes (kg)" value={w} onChange={(e) => setW(e.target.value)} className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-3" /><input type="number" step="0.1" placeholder="% greix" value={fat} onChange={(e) => setFat(e.target.value)} className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-3" /><button type="submit" className="min-h-[48px] rounded-xl bg-slate-900 px-5 font-bold text-white">Guardar</button></form>{weightSeries.length ? <div className="mt-4 h-48"><ResponsiveContainer width="100%" height="100%"><LineChart data={weightSeries}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" /><XAxis dataKey="date" fontSize={12} /><YAxis domain={['dataMin - 2', 'dataMax + 2']} /><Tooltip /><Line type="monotone" dataKey="pes" stroke="#2563eb" strokeWidth={3} dot={false} /></LineChart></ResponsiveContainer></div> : <p className="mt-4 text-sm text-slate-400">Registra el teu pes per veure l'evolució dels últims 30 dies.</p>}</section><section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Objectius</h2><form onSubmit={addGoal} className="mt-3 grid gap-2 sm:grid-cols-4"><input required placeholder="Press banca 65kg x20" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3 sm:col-span-2" /><input type="number" placeholder="Objectiu" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /><input type="number" placeholder="Actual" value={goalCurrent} onChange={(e) => setGoalCurrent(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /><button type="submit" className="min-h-[48px] rounded-xl bg-slate-900 font-bold text-white sm:col-span-4">Afegir objectiu</button></form><ul className="mt-4 space-y-3">{goals.length === 0 && <li className="text-sm text-slate-400">Cap objectiu establert.</li>}{goals.map((g) => { const pct = g.target ? Math.min(100, Math.round(((g.current || 0) / g.target) * 100)) : 0; return <li key={g.id}><div className="flex justify-between text-sm font-semibold"><span>{g.title}</span><span>{pct}%</span></div><div className="mt-1 h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-green-600" style={{ width: `${pct}%` }} /></div></li>; })}</ul></section></AppShell>;
 }
