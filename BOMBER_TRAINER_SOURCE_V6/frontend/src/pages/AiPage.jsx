@@ -18,11 +18,17 @@ export default function AiPage() {
     const endRef = useRef(null);
 
     useEffect(() => {
+        const owner = pb.authStore.record?.id;
+        if (!owner) {
+            setData({ sessions: [], weights: [], goals: [], material: [] });
+            return;
+        }
+        const ownerFilter = `owner = "${owner}"`;
         Promise.all([
-            pb.collection('bt_sessions').getFullList({ sort: '-date' }).catch(() => []),
-            pb.collection('bt_weights').getFullList({ sort: '-date' }).catch(() => []),
-            pb.collection('bt_goals').getFullList().catch(() => []),
-            pb.collection('bt_settings').getFullList().catch(() => []),
+            pb.collection('bt_sessions').getFullList({ sort: '-date', filter: ownerFilter }).catch(() => []),
+            pb.collection('bt_weights').getFullList({ sort: '-date', filter: ownerFilter }).catch(() => []),
+            pb.collection('bt_goals').getFullList({ sort: '-created', filter: ownerFilter }).catch(() => []),
+            pb.collection('bt_settings').getFullList({ sort: '-created', filter: ownerFilter }).catch(() => []),
         ]).then(([sessions, weights, goals, settings]) => {
             setData({ sessions, weights, goals, material: settings[0]?.material || [] });
         });

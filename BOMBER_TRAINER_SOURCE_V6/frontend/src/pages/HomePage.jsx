@@ -21,7 +21,15 @@ export default function HomePage() {
     const [sessions, setSessions] = useState([]);
 
     useEffect(() => {
-        pb.collection('bt_sessions').getFullList({ sort: '-date' }).then(setSessions).catch(() => setSessions([]));
+        const owner = pb.authStore.record?.id;
+        if (!owner) {
+            setSessions([]);
+            return;
+        }
+        pb.collection('bt_sessions')
+            .getFullList({ sort: '-date', filter: `owner = "${owner}"` })
+            .then(setSessions)
+            .catch(() => setSessions([]));
     }, []);
 
     const points = totalPoints(sessions);
