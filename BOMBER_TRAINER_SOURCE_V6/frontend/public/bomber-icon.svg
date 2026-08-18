@@ -1,28 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#160b0b"/><stop offset="1" stop-color="#3b0905"/></linearGradient>
-    <linearGradient id="fire" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#ff3d00"/><stop offset=".55" stop-color="#ff8a00"/><stop offset="1" stop-color="#ffd54a"/></linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#07090d"/><stop offset="1" stop-color="#24100b"/></linearGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff9a16"/><stop offset=".55" stop-color="#f05a12"/><stop offset="1" stop-color="#c8320c"/></linearGradient>
+    <linearGradient id="fire" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#e83b08"/><stop offset=".55" stop-color="#ff7a0a"/><stop offset="1" stop-color="#ffb52b"/></linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <path d="M76 390c18-48 4-80 39-113 0 49 34 58 42 85-2-66 38-92 52-149 35 44 44 78 32 120 29-29 41-61 35-99 61 53 72 112 38 156H76Z" fill="url(#fire)"/>
-  <path d="M98 392c23-34 55-43 91-27 28 12 49 10 71-11 21-20 33-47 31-76 38 40 44 82 17 114H98Z" fill="#fff2b0" opacity=".9"/>
-  <g fill="#151a20" stroke="#e5e7eb" stroke-width="8" stroke-linejoin="round">
-    <path d="M201 166h111l24 42-18 80-30 16-15-57-18 57-32-16-20-80Z"/>
-    <path d="M203 174c3-47 25-72 54-72s51 25 54 72l-27 18h-54Z" fill="#f3f4f6"/>
-    <path d="M213 137h88" fill="none"/>
-    <path d="M220 204l-36 76-47 28 18 25 62-25 32-54"/>
-    <path d="M292 204l37 76 48 28-18 25-62-25-32-54"/>
-    <path d="M235 293l-7 67-45 39 25 22 63-48 7-55"/>
-    <path d="M285 293l7 67 45 39-25 22-63-48-7-55"/>
-    <path d="M173 363h-38l-25 35h86Z"/>
-    <path d="M339 363h38l25 35h-86Z"/>
-    <path d="M152 313h-50v22h50M360 313h50v22h-50"/>
+  <rect width="512" height="512" rx="112" fill="url(#sky)"/>
+  <!-- burning mountain background -->
+  <path d="M0 356 74 270l46 52 62-104 52 72 70-124 76 122 52-58 80 126v98H0Z" fill="#26130f"/>
+  <path d="M0 369 74 294l46 51 62-91 52 63 70-104 76 106 52-49 80 99v73H0Z" fill="url(#fire)" opacity=".78"/>
+  <path d="M0 414c63-43 112-42 160-9 55 37 102 36 154 1 58-39 119-35 198 15v91H0Z" fill="#080b0e"/>
+  <path d="M48 405l38-55 24 35 34-54 34 48 30-43 34 61" fill="none" stroke="#ff8a12" stroke-width="8" opacity=".65"/>
+  <!-- large B: the climber climbs the letter itself -->
+  <path d="M206 82h126c73 0 112 31 112 84 0 31-15 55-43 68 37 13 57 40 57 78 0 64-48 104-126 104H206V82Zm62 50v78h55c39 0 58-13 58-40 0-26-19-38-58-38h-55Zm0 126v108h62c43 0 64-17 64-53 0-37-21-55-64-55h-62Z" fill="url(#b)" stroke="#ffad38" stroke-width="4"/>
+  <!-- small helmeted climber outside/on the left edge of B -->
+  <g fill="#090b0d" stroke="#f5a128" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="184" cy="213" r="13"/>
+    <path d="M169 211c1-16 9-24 21-24 12 0 19 8 20 24h-41Z"/>
+    <path d="M177 226l-7 35 17 23 15-24-5-34Z"/>
+    <path d="M174 236l-23 22M196 239l21-17M181 282l-17 30M196 280l18 28" fill="none" stroke-width="8"/>
+    <path d="M152 257l-13 7" fill="none" stroke-width="6"/>
+    <path d="M165 312l-10 8M214 308l10 8" fill="none" stroke-width="6"/>
+    <path d="M166 235c-4 17-2 31 8 44M203 234c3 16 1 30-8 45" fill="none" stroke="#f5a128" stroke-width="3"/>
   </g>
-  <g fill="#252b31" stroke="#f3f4f6" stroke-width="7">
-    <path d="M103 352h42l24 53H88Z"/>
-    <path d="M409 352h-42l-24 53h81Z"/>
-    <path d="M68 398h102v25H68Z"/>
-    <path d="M342 398h102v25H342Z"/>
-  </g>
-  <path d="M92 443c73 24 252 24 328 0" fill="none" stroke="#ff5a1f" stroke-width="10" stroke-linecap="round"/>
+  <!-- rope following the B edge -->
+  <path d="M153 221c-7 58 13 103 48 128 13 9 18 25 13 42" fill="none" stroke="#d9d2c7" stroke-width="3" stroke-dasharray="7 6" opacity=".9"/>
+  <!-- flames around the emblem -->
+  <path d="M53 371c-18-36 8-51 7-76 25 20 25 43 17 58 22-14 30-34 25-56 34 29 31 65 9 88-15 16-34 15-58-14ZM454 365c18-34-7-50-6-73-24 20-25 42-17 57-21-14-30-33-25-55-32 29-30 64-8 87 15 16 33 14 56-16Z" fill="url(#fire)"/>
 </svg>
