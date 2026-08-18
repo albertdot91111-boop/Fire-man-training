@@ -68,6 +68,22 @@ function safeNumber(value, fallback = 0) {
     return Number.isFinite(n) ? n : fallback;
 }
 
+function legacyTimeSeconds(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return 0;
+    if (text.includes(':')) {
+        const [m, s = '0'] = text.split(':');
+        const minutes = Number(m);
+        const seconds = Number(s);
+        return Number.isFinite(minutes) && Number.isFinite(seconds) ? (minutes * 60) + seconds : 0;
+    }
+    const n = Number(text);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    // Match ProgressPage's legacy convention: small bare values are minutes;
+    // larger bare values are already seconds.
+    return n < 20 ? n * 60 : n;
+}
+
 function sessionSeconds(session) {
     if (!session) return 0;
     const duration = safeNumber(session.duration, 0);
@@ -76,25 +92,11 @@ function sessionSeconds(session) {
 
     const data = Array.isArray(session.data) ? session.data : [];
     const complete = data.find((entry) => String(entry.exercici || '').toLowerCase().includes('circuit complet'));
-    if (complete?.temps) {
-        const value = safeNumber(complete.temps, 0);
-        return value > 0 ? value * 60 : 0;
-    }
+    if (complete?.temps) return legacyTimeSeconds(complete.temps);
 
-    // Legacy phase values without a colon are stored in minutes; min:sec remains supported.
-    const phaseTimes = data.map((entry) => {
-        const raw = entry?.temps;
-        if (raw === undefined || raw === null || raw === '') return 0;
-        const text = String(raw).trim();
-        if (text.includes(':')) {
-            const [minutes, seconds = '0'] = text.split(':');
-            const m = Number(minutes);
-            const s = Number(seconds);
-            return Number.isFinite(m) && Number.isFinite(s) ? (m * 60) + s : 0;
-        }
-        const minutes = Number(text);
-        return Number.isFinite(minutes) ? minutes * 60 : 0;
-    }).filter((value) => value > 0);
+    const phaseTimes = data
+        .map((entry) => legacyTimeSeconds(entry?.temps))
+        .filter((value) => value > 0);
 
     return phaseTimes.reduce((sum, value) => sum + value, 0);
 }
