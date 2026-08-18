@@ -3,6 +3,7 @@ export const TYPES = {
     cames: { key: 'cames', label: 'Cames', short: 'CAMES', color: '#16a34a', soft: '#dcfce7' },
     estructural: { key: 'estructural', label: 'Incendi estructural', short: 'ESTRUCTURAL', color: '#dc2626', soft: '#fee2e2' },
     forestal: { key: 'forestal', label: 'Incendi forestal', short: 'FORESTAL', color: '#ea580c', soft: '#ffedd5' },
+    aquatic: { key: 'aquatic', label: 'Prova aquàtica', short: 'AQUÀTICA', color: '#0284c7', soft: '#e0f2fe' },
     pressbanca: { key: 'pressbanca', label: 'Press banca', short: 'PRESS BANCA', color: '#7c3aed', soft: '#ede9fe' },
     manteniment: { key: 'manteniment', label: 'Manteniment', short: 'MANTENIMENT', color: '#ca8a04', soft: '#fef9c3' },
     rapid: { key: 'rapid', label: 'Entrenament ràpid', short: 'RÀPID', color: '#d97706', soft: '#fef3c7' },
@@ -30,18 +31,26 @@ export const PLANS = {
         { name: 'Bessons', detail: '3 sèries', fields: ['pes', 'reps'] },
     ],
     estructural: [
-        { name: '1. Discos (transport)', detail: 'Temps de la seqüència', fields: ['temps', 'descans'] },
-        { name: '2. Kettlebells', detail: 'Temps de la seqüència', fields: ['temps', 'descans'] },
-        { name: '3. Trineu', detail: 'Temps de la seqüència', fields: ['temps', 'descans'] },
-        { name: '4. Recorregut en C', detail: 'Temps de la seqüència', fields: ['temps', 'descans'] },
-        { name: '5. Arrossegament de maniquí', detail: 'Temps de la seqüència', fields: ['temps', 'descans'] },
-        { name: '6. Esprint final', detail: 'Temps de la seqüència', fields: ['temps', 'descans'] },
+        { name: '1. Discos (transport)', detail: '2 discos de 10 kg · equilibri + 10 step-ups', fields: ['temps', 'descans'] },
+        { name: '2. Kettlebells', detail: '2 kettlebells de 16 kg · configuració fixa del projecte', fields: ['temps', 'descans'] },
+        { name: '3. Trineu', detail: '10 m estirar + 10 m empènyer', fields: ['temps', 'descans'] },
+        { name: '4. Recorregut en C', detail: 'Recorregut sota tanques', fields: ['temps', 'descans'] },
+        { name: '5. Arrossegament de maniquí', detail: 'Ninot de 50 kg · configuració fixa del projecte', fields: ['temps', 'descans'] },
+        { name: '6. Esprint final', detail: '10 m', fields: ['temps', 'descans'] },
     ],
     forestal: [
-        { name: 'TRAM 1', detail: '8 slam balls + 20 m rectes', fields: ['temps', 'descans'] },
-        { name: 'TRAM 2', detail: '16 slam balls + 20 m rectes', fields: ['temps', 'descans'] },
-        { name: 'TRAM 3', detail: '10 slam balls + 20 m rectes', fields: ['temps', 'descans'] },
-        { name: 'CIRCUIT COMPLET', detail: 'Els 3 trams seguits · temps total i temps de cada tram', fields: ['temps', 'tram1', 'tram2', 'tram3'] },
+        { name: 'TRAM 1', detail: 'Bloc INEFC: 8 x 20 m + 16 slam balls', fields: ['temps', 'descans'] },
+        { name: 'TRAM 2', detail: 'Bloc INEFC: 10 x 20 m + 20 slam balls', fields: ['temps', 'descans'] },
+        { name: 'TRAM 3', detail: 'Bloc INEFC: 12 x 20 m + 24 slam balls', fields: ['temps', 'descans'] },
+        { name: 'CIRCUIT COMPLET', detail: 'Els 3 blocs seguits · temps total i temps de cada bloc', fields: ['temps', 'tram1', 'tram2', 'tram3'] },
+    ],
+    aquatic: [
+        { name: '1. Entrada segura', detail: 'Peus primer, cap fora i contacte visual', fields: ['temps'] },
+        { name: '2. Apnea', detail: '15 m sota tanca', fields: ['temps'] },
+        { name: '3. Batuda / bicicleta', detail: '30 s amb cap i mans fora', fields: ['temps'] },
+        { name: '4. Estil lliure sota corxeres', detail: '25 m anada + 25 m tornada · tocant paret i sense viratge', fields: ['temps'] },
+        { name: '5. Crol de salvament', detail: '25 m amb cap fora excepte al pas de corxeres', fields: ['temps'] },
+        { name: '6. Remolc de maniquí', detail: '25 m · vies aèries fora excepte al pas de corxeres · extracció completa', fields: ['temps'] },
     ],
     manteniment: [
         { name: 'Dominades', detail: 'Repeticions per sèrie', fields: ['series'] },
@@ -63,7 +72,7 @@ export const POINTS = { complet: 100, manteniment: 40, minim: 20 };
 
 // Barem PROVISIONAL estimat a partir de les dades que tenim ara.
 // NO és el barem oficial: forestal 10 ≈ 3:10 i urbà/estructural 10 ≈ 2:10.
-// Quan tinguem el barem real, només cal substituir aquests temps.
+// L'aquàtica no té encara un barem numèric fixat al projecte.
 export const PHYSICAL_BAREMS = {
     forestal: { 5: 240, 6: 225, 7: 215, 8: 205, 9: 195, 10: 190 },
     estructural: { 5: 180, 6: 165, 7: 155, 8: 145, 9: 135, 10: 130 },
@@ -77,7 +86,7 @@ export function formatTime(totalSeconds) {
 }
 
 export function parseTime(value) {
-    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value * 60 : 0;
     const text = String(value ?? '').trim();
     if (!text) return 0;
     if (text.includes(':')) {
@@ -86,7 +95,9 @@ export function parseTime(value) {
         const seconds = Number(s);
         return Number.isFinite(minutes) && Number.isFinite(seconds) ? (minutes * 60) + seconds : 0;
     }
-    return Number(text) || 0;
+    // Els camps de temps de l'app són en minuts. Per posar segons, usa min:s.
+    const minutes = Number(text);
+    return Number.isFinite(minutes) ? minutes * 60 : 0;
 }
 
 export function gradeForTime(type, totalSeconds) {
@@ -186,7 +197,7 @@ export function daysSince(sessions, type) {
 }
 
 export function weakPoints(sessions) {
-    return ['pit', 'cames', 'estructural', 'forestal']
+    return ['pit', 'cames', 'estructural', 'forestal', 'aquatic']
         .map((t) => ({ type: t, days: daysSince(sessions, t) }))
         .filter((x) => x.days === null || x.days >= 7)
         .sort((a, b) => (b.days ?? 999) - (a.days ?? 999));
@@ -207,7 +218,7 @@ export function buildUserContext({ sessions, weights, goals, material, minutes }
     return [
         '[DADES DE L\'USUARI]',
         `Ratxa: ${streak(sessions)} dies. Punts totals: ${totalPoints(sessions)}. Nivell: ${levelFor(totalPoints(sessions)).name}.`,
-        `Dies sense treballar: ${['pit', 'cames', 'estructural', 'forestal', 'manteniment'].map((t) => `${TYPES[t].short}=${daysSince(sessions, t) ?? 'mai'}`).join(', ')}.`,
+        `Dies sense treballar: ${['pit', 'cames', 'estructural', 'forestal', 'aquatic', 'manteniment'].map((t) => `${TYPES[t].short}=${daysSince(sessions, t) ?? 'mai'}`).join(', ')}.`,
         `Material disponible: ${(material && material.length ? material : ['cap indicat']).join(', ')}.`,
         `Objectius: ${goals.length ? goals.map((g) => `${g.title} (${g.current || 0}/${g.target || 0} ${g.unit || ''})`).join('; ') : 'cap'}.`,
         `Pes corporal recent: ${weights.slice(0, 5).map((w) => `${w.date}:${w.weight}kg`).join(', ') || 'sense registres'}.`,
