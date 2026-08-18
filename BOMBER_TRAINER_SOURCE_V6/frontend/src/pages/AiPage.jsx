@@ -5,6 +5,7 @@ import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
 import { useIntegratedAi } from '@/hooks/use-integrated-ai';
 import { buildUserContext } from '@/lib/btData';
+import { buildBomberAiContext, diagnoseBomberProgress } from '@/aiEngine';
 
 const QUICK = ['Com vaig?', 'Què haig de millorar?', 'Què faig avui?', 'Quins punts febles tinc?'];
 
@@ -29,10 +30,13 @@ export default function AiPage() {
 
     useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
+    const diagnosis = diagnoseBomberProgress(data.sessions);
+
     const ask = (text) => {
         if (!text.trim() || isStreaming) return;
-        const context = buildUserContext({ ...data, minutes });
-        sendMessage(`${text}\n\n${context}`);
+        const userContext = buildUserContext({ ...data, minutes });
+        const bomberContext = buildBomberAiContext({ ...data, minutes });
+        sendMessage(`${text}\n\n${userContext}\n\n${bomberContext}`);
         setInput('');
     };
 
@@ -49,6 +53,9 @@ export default function AiPage() {
                     Analitzo les teves {data.sessions.length} sessions registrades, el teu pes, objectius i material disponible
                     {minutes ? ` i els ${minutes} minuts que tens avui.` : '.'}
                 </p>
+                <p className="mt-2 text-xs font-semibold text-purple-700">
+                    {diagnosis.priority ? `Prioritat actual: ${diagnosis.priority === 'aquatic' ? 'aquàtica' : diagnosis.priority === 'estructural' ? 'urbana / estructural' : 'forestal'}.` : 'Encara estic recollint dades per prioritzar.'}
+                </p>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -62,7 +69,7 @@ export default function AiPage() {
 
             <div className="space-y-3 rounded-3xl bg-white border border-slate-200 p-4 shadow-sm min-h-[240px]">
                 {isLoadingHistory && <p className="text-sm text-slate-400">Carregant converses…</p>}
-                {!isLoadingHistory && messages.length === 0 && <p className="text-sm text-slate-400">Pregunta&apos;m el que vulguis sobre el teu entrenament.</p>}
+                {!isLoadingHistory && messages.length === 0 && <p className="text-sm text-slate-400">Pregunta'm el que vulguis sobre el teu entrenament.</p>}
                 {messages.map((m, i) => (
                     <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}>
                         <div className={`inline-block max-w-[90%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-sm ${m.role === 'user' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-800'}`}>
@@ -73,10 +80,7 @@ export default function AiPage() {
                 <div ref={endRef} />
             </div>
 
-            <form
-                onSubmit={(e) => { e.preventDefault(); ask(input); }}
-                className="sticky bottom-24 flex gap-2 rounded-3xl bg-white border border-slate-200 p-3 shadow-sm"
-            >
+            <form onSubmit={(e) => { e.preventDefault(); ask(input); }} className="sticky bottom-24 flex gap-2 rounded-3xl bg-white border border-slate-200 p-3 shadow-sm">
                 <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Escriu la teva pregunta…" className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-4" />
                 <button type="submit" disabled={isStreaming} className="min-h-[48px] rounded-xl bg-purple-700 px-5 font-bold text-white disabled:opacity-60">{isStreaming ? '…' : 'Envia'}</button>
             </form>
