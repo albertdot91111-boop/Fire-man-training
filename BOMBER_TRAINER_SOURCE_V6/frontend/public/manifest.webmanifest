@@ -1,0 +1,18 @@
+{
+  "name": "BOMBER TRAINER",
+  "short_name": "BOMBER TRAINER",
+  "description": "Entrenament i seguiment per a opositors a bomber",
+  "lang": "ca",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "/bomber-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
