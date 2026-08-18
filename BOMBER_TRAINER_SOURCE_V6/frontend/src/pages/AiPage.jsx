@@ -9,6 +9,75 @@ import { buildBomberAiContext, diagnoseBomberProgress } from '@/aiEngine';
 
 const QUICK = ['Com vaig?', 'Què haig de millorar?', 'Què faig avui?', 'Quins punts febles tinc?'];
 
+const LABELS = {
+    forestal: 'Forestal',
+    estructural: 'Estructural',
+    aquatic: 'Aquàtica',
+};
+
+function formatTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds <= 0) return '—';
+    const min = Math.floor(seconds / 60);
+    const sec = Math.round(seconds % 60).toString().padStart(2, '0');
+    return `${min}:${sec}`;
+}
+
+function typeSessions(sessions, type) {
+    return sessions.filter((s) => s.type === type).sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+}
+
+function localCoachAnswer(question, data, minutes) {
+    const diagnosis = diagnoseBomberProgress(data.sessions || []);
+    const tests = diagnosis.tests.filter((t) => t.sessions > 0);
+    const priority = diagnosis.priority;
+    const weight = data.weights?.[0]?.weight;
+    const goal = data.goals?.[0];
+    const material = data.material?.length ? data.material.join(', ') : 'material no indicat';
+    const availableMinutes = Number(minutes) > 0 ? Number(minutes) : 45;
+    const lower = question.toLowerCase();
+
+    if (lower.includes('com vaig')) {
+        if (!tests.length) {
+            return 'Encara no tinc prou sessions cronometrades per valorar el teu nivell. Registra almenys una sessió de cada prova i et faré la comparació.';
+        }
+        const lines = tests.map((t) => {
+            const trend = t.trendSeconds == null ? '' : t.trendSeconds < 0 ? ` 🟢 ${Math.abs(Math.round(t.trendSeconds))} s més ràpid` : t.trendSeconds > 0 ? ` 🔴 ${Math.round(t.trendSeconds)} s més lent` : ' 🟡 estable';
+            return `• ${t.label}: últim ${formatTime(t.latestTimeSeconds)}, millor ${formatTime(t.bestTimeSeconds)}${trend}`;
+        });
+        return `### Com vas ara\n\n${lines.join('\n')}\n\n**Prioritat actual:** ${priority ? LABELS[priority] : 'pendent de més dades'}.\n\nAquesta lectura surt de les teves sessions reals, no d'una nota inventada.${weight ? ` Pes recent: ${weight} kg.` : ''}${goal?.title ? ` Objectiu actiu: ${goal.title}.` : ''}`;
+    }
+
+    if (lower.includes('punts febles')) {
+        if (!tests.length) return 'Encara no puc detectar punts febles: necessito més sessions registrades.';
+        const ranked = [...tests].sort((a, b) => {
+            if (b.penaltiesLatest !== a.penaltiesLatest) return b.penaltiesLatest - a.penaltiesLatest;
+            return (b.trendSeconds || 0) - (a.trendSeconds || 0);
+        });
+        return `### Els teus punts febles\n\n${ranked.map((t, i) => `${i + 1}. **${t.label}** — ${t.penaltiesLatest ? `${t.penaltiesLatest} penalització/ons recents` : t.trendSeconds > 0 ? `tendència negativa: +${Math.round(t.trendSeconds)} s` : 'sense senyal negatiu clar'}`).join('\n')}\n\n**Prioritat:** ${priority ? LABELS[priority] : 'encara no determinada'}. Si em registres més sessions, aquesta classificació es recalcula.`;
+    }
+
+    if (lower.includes('millorar')) {
+        if (!priority) return 'Primer registra més proves. Amb dades suficients et diré quina prova està limitant més el teu progrés.';
+        const sessionCount = typeSessions(data.sessions || [], priority).length;
+        return `### Què milloraria primer\n\n**1. ${LABELS[priority]}** — és la prioritat actual segons les teves dades.\n\nTens ${sessionCount} sessió/ns registrada/es d'aquesta prova.\n\n**Objectiu de la propera sessió:** treballar qualitat i repetir la prova sense buscar màxima intensitat a cada intent.\n\nSi hi ha dolor, para i no intentis compensar augmentant càrrega o volum.`;
+    }
+
+    if (lower.includes('què faig avui') || lower.includes('que faig avui')) {
+        const focus = priority || 'forestal';
+        const focusName = LABELS[focus];
+        const short = availableMinutes <= 30;
+        const long = availableMinutes >= 60;
+        const plan = focus === 'forestal'
+            ? (short ? ['Escalfament 6 min', '3 × tram tècnic a ritme controlat', '2 × ruta parcial', '5 min recuperació'] : long ? ['Escalfament 10 min', '4 × treball específic de tram', '2 × circuit complet al 80–90%', '10 min recuperació'] : ['Escalfament 8 min', '3 × treball específic de tram', '1 × circuit complet controlat', '8 min recuperació'])
+            : focus === 'estructural'
+                ? (short ? ['Escalfament 6 min', '3 × bloc tècnic', '2 × arrossegament/empenta', '5 min recuperació'] : ['Escalfament 10 min', '3 × circuit tècnic', '3 × arrossegament/empenyiment', '10 min recuperació'])
+                : (short ? ['Escalfament 8 min', '4 × 25 m tècnics', '2 × remolc controlat', '5 min recuperació'] : ['Escalfament 10 min', '4 × 25 m tècnics', '3 × treball de remolc', '10 min recuperació']);
+        return `### Entrenament d'avui — ${focusName}\n\n**Temps disponible:** ${availableMinutes} min\n**Material:** ${material}\n\n${plan.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\n**Intenció:** millorar ${focusName.toLowerCase()} sense convertir cada sessió en un test màxim.\n\nQuan acabis, registra els temps i penalitzacions a BOMBER TRAINER i la següent recomanació es podrà ajustar a les dades noves.`;
+    }
+
+    return null;
+}
+
 export default function AiPage() {
     const { messages, isStreaming, isLoadingHistory, sendMessage } = useIntegratedAi();
     const [params] = useSearchParams();
@@ -40,9 +109,14 @@ export default function AiPage() {
 
     const ask = (text) => {
         if (!text.trim() || isStreaming) return;
+        const local = localCoachAnswer(text, data, minutes);
         const userContext = buildUserContext({ ...data, minutes });
         const bomberContext = buildBomberAiContext({ ...data, minutes });
-        sendMessage(`${text}\n\n${userContext}\n\n${bomberContext}`);
+        if (local) {
+            sendMessage(`${text}\n\n[DADES BOMBER TRAINER]\n${userContext}\n\n${bomberContext}\n\n[RESPOSTA LOCAL DE L'ENTRENADOR]\n${local}\n\nUtilitza aquesta anàlisi com a base i, si pots, afegeix context útil sense contradir les dades.`);
+        } else {
+            sendMessage(`${text}\n\n${userContext}\n\n${bomberContext}`);
+        }
         setInput('');
     };
 
@@ -50,7 +124,7 @@ export default function AiPage() {
         <AppShell title="Assistent IA">
             <Helmet>
                 <title>Assistent IA — BOMBER TRAINER</title>
-                <meta name="description" content="Assistent IA que analitza el teu historial real i et recomana l'entrenament d'avui." />
+                <meta name="description" content="Assistent IA que analitza l'historial real i ajuda a decidir què entrenar." />
             </Helmet>
 
             <div className="rounded-3xl p-5" style={{ backgroundColor: '#f3e8ff', borderLeft: '8px solid #7c3aed' }}>
