@@ -3,20 +3,21 @@ import Helmet from 'react-helmet';
 import { useNavigate, useParams } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
-import { INCIDENTS, PLANS, POINTS, TYPES, today } from '@/lib/btData';
+import { INCIDENTS, PLANS, POINTS, TYPES, parseTime, today } from '@/lib/btData';
 
 const MAINTENANCE_MINUTES = [5, 10, 15];
+const TIME_FIELDS = new Set(['temps', 'tram1', 'tram2', 'tram3']);
 const maintenanceSeriesCount = (minutes) => ({ 5: 1, 10: 2, 15: 3 }[minutes] || 2);
 
 const FIELD_LABELS = {
     pes: 'Pes (kg)',
     reps: 'Repeticions',
     series: 'Sèries',
-    temps: 'Temps (s)',
+    temps: 'Temps (min:s)',
     descans: 'Descans (s)',
-    tram1: 'Tram 1 (s)',
-    tram2: 'Tram 2 (s)',
-    tram3: 'Tram 3 (s)',
+    tram1: 'Tram 1 (min:s)',
+    tram2: 'Tram 2 (min:s)',
+    tram3: 'Tram 3 (min:s)',
 };
 
 export default function TrainPage() {
@@ -58,7 +59,12 @@ export default function TrainPage() {
             const points = kind === 'complet' ? POINTS.complet : kind === 'manteniment' ? POINTS.manteniment : POINTS.minim;
             const seriesCount = maintenanceSeriesCount(Number(duration));
             const data = plan.map((p, i) => {
-                if (!isMaintenance) return { exercici: p.name, ...entries[i] };
+                if (!isMaintenance) {
+                    return Object.fromEntries(Object.entries({ exercici: p.name, ...entries[i] }).map(([key, value]) => [
+                        key,
+                        TIME_FIELDS.has(key) ? parseTime(value) : value,
+                    ]));
+                }
                 return {
                     exercici: exerciseNames[i].trim() || p.name,
                     series: (Array.isArray(entries[i]?.series) ? entries[i].series : []).slice(0, seriesCount).map((value) => String(value ?? '').trim()),
@@ -160,8 +166,9 @@ export default function TrainPage() {
                                         <label key={f} className="grid gap-1 text-sm font-semibold capitalize">
                                             {FIELD_LABELS[f] || f}
                                             <input
-                                                type="number"
-                                                inputMode="decimal"
+                                                type={TIME_FIELDS.has(f) ? 'text' : 'number'}
+                                                inputMode={TIME_FIELDS.has(f) ? 'decimal' : 'decimal'}
+                                                placeholder={TIME_FIELDS.has(f) ? 'ex. 3:05' : undefined}
                                                 data-testid={`train-field-${i}-${f}`}
                                                 value={entries[i]?.[f] ?? ''}
                                                 onChange={(e) => setField(i, f, e.target.value)}
