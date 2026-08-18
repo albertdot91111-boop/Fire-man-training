@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Helmet from 'react-helmet';
 import { useNavigate, useParams } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
-import { INCIDENTS, PLANS, POINTS, TYPES, parseTime, today } from '@/lib/btData';
+import { INCIDENTS, PLANS, POINTS, TYPES, formatTime, parseTime, today } from '@/lib/btData';
 
 const MAINTENANCE_MINUTES = [5, 10, 15];
 const TIME_FIELDS = new Set(['temps', 'tram1', 'tram2', 'tram3']);
@@ -25,6 +25,7 @@ export default function TrainPage() {
     const t = TYPES[type] || TYPES.manteniment;
     const plan = PLANS[t.key] || [];
     const isMaintenance = t.key === 'manteniment';
+    const isForestal = t.key === 'forestal';
     const [duration, setDuration] = useState(() => (isMaintenance ? '10' : ''));
     const [entries, setEntries] = useState(() => plan.map(() => (isMaintenance ? { series: ['', ''] } : {})));
     const [exerciseNames, setExerciseNames] = useState(() => plan.map((p) => p.name));
@@ -52,6 +53,11 @@ export default function TrainPage() {
     const setExerciseName = (index, value) => setExerciseNames((prev) => prev.map((name, nameIndex) => (nameIndex === index ? value : name)));
     const toggleIncident = (name) => setIncidents((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]));
 
+    const forestalTotalSeconds = useMemo(() => {
+        if (!isForestal) return 0;
+        return entries.slice(0, 3).reduce((sum, entry) => sum + parseTime(entry?.temps), 0);
+    }, [entries, isForestal]);
+
     const save = async (kind) => {
         setBusy(true);
         setError('');
@@ -60,6 +66,15 @@ export default function TrainPage() {
             const seriesCount = maintenanceSeriesCount(Number(duration));
             const data = plan.map((p, i) => {
                 if (!isMaintenance) {
+                    if (isForestal && p.name === 'CIRCUIT COMPLET') {
+                        return {
+                            exercici: p.name,
+                            temps: forestalTotalSeconds,
+                            tram1: parseTime(entries[0]?.temps),
+                            tram2: parseTime(entries[1]?.temps),
+                            tram3: parseTime(entries[2]?.temps),
+                        };
+                    }
                     return Object.fromEntries(Object.entries({ exercici: p.name, ...entries[i] }).map(([key, value]) => [
                         key,
                         TIME_FIELDS.has(key) ? parseTime(value) : value,
@@ -77,7 +92,7 @@ export default function TrainPage() {
             await pb.collection('bt_sessions').create({
                 type: t.key,
                 date: today(),
-                duration: Number(duration) || 0,
+                duration: isForestal ? forestalTotalSeconds / 60 : Number(duration) || 0,
                 points: t.key === 'descans' ? 0 : points,
                 incidents: incidents.join(', '),
                 notes,
@@ -144,6 +159,16 @@ export default function TrainPage() {
                                     ))}
                                 </div>
                             </>
+                        ) : isForestal && p.name === 'CIRCUIT COMPLET' ? (
+                            <>
+                                <p className="font-extrabold">{p.name}</p>
+                                <p className="text-sm text-slate-500">Els 3 trams seguits. El temps total es calcula automàticament.</p>
+                                <div className="mt-3 rounded-2xl bg-orange-50 border border-orange-100 p-4">
+                                    <p className="text-xs font-bold text-orange-700">TEMPS TOTAL</p>
+                                    <p className="mt-1 text-2xl font-extrabold text-slate-900">{formatTime(forestalTotalSeconds)}</p>
+                                    <p className="mt-1 text-xs text-slate-500">Tram 1 + Tram 2 + Tram 3</p>
+                                </div>
+                            </>
                         ) : (
                             <>
                                 <p className="font-extrabold">{p.name}</p>
@@ -165,6 +190,8 @@ export default function TrainPage() {
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm space-y-4">
                 {isMaintenance ? (
                     <p className="text-sm font-semibold">Durada seleccionada: <strong>{duration} min</strong></p>
+                ) : isForestal ? (
+                    <p className="text-sm font-semibold">Durada total: <strong>{formatTime(forestalTotalSeconds)}</strong></p>
                 ) : (
                     <label className="grid gap-1 text-sm font-semibold">Durada total (min)<input type="number" step="0.1" value={duration} onChange={(e) => setDuration(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /></label>
                 )}
