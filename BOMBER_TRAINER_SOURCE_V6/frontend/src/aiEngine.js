@@ -2,7 +2,7 @@ export const BOMBER_AI_SOURCE_POLICY = {
     priority: [
         'barem/protocol oficial de la convocatòria',
         'document o protocol INEFC incorporat al projecte',
-        'documents tècnics d’entrenadors especialitzats',
+        'documents tècnics d\'entrenadors especialitzats',
         'dades reals registrades per l\'usuari',
         'inferència de la IA',
     ],
@@ -38,7 +38,7 @@ export const BOMBER_TESTS = {
         ],
         userReference: '10 aproximadament en 3 minuts i poc; maniquí 35 kg. No oficial.',
     },
-    structural: {
+    estructural: {
         label: 'Prova estructural/urbana',
         source: 'Protocol/document INEFC incorporat al projecte + configuració de l\'usuari',
         phases: [
@@ -68,18 +68,28 @@ function safeNumber(value, fallback = 0) {
     return Number.isFinite(n) ? n : fallback;
 }
 
+function sessionSeconds(session) {
+    if (!session) return 0;
+    const duration = safeNumber(session.duration, 0);
+    // TrainPage stores total session duration in minutes.
+    if (duration > 0) return duration * 60;
+
+    const data = Array.isArray(session.data) ? session.data : [];
+    const complete = data.find((entry) => String(entry.exercici || '').toLowerCase().includes('circuit complet'));
+    if (complete?.temps) return safeNumber(complete.temps, 0);
+
+    const phaseTimes = data.map((entry) => safeNumber(entry?.temps, 0)).filter((value) => value > 0);
+    return phaseTimes.reduce((sum, value) => sum + value, 0);
+}
+
 export function adjustedTime(session) {
-    const base = safeNumber(session?.totalSeconds ?? session?.durationSeconds ?? session?.duration, 0);
+    const base = sessionSeconds(session);
     const penalties = safeNumber(session?.penalties, 0);
     if (!base) return 0;
-    const penaltySeconds = session?.type === 'aquatic'
-        ? penalties * 10
-        : session?.type === 'estructural'
-            ? penalties * 5
-            : session?.type === 'forestal'
-                ? penalties * 10
-                : 0;
-    return base + penaltySeconds;
+    if (session?.type === 'aquatic') return base + penalties * 10;
+    if (session?.type === 'estructural') return base + penalties * 5;
+    if (session?.type === 'forestal') return base + penalties * 10;
+    return base;
 }
 
 function latestByType(sessions, type) {
@@ -136,14 +146,14 @@ export function diagnoseBomberProgress(sessions = []) {
 export function buildBomberAiContext({ sessions = [], weights = [], goals = [], material = [], minutes = '' }) {
     const diagnosis = diagnoseBomberProgress(sessions);
     const recent = sessions.slice(0, 20).map((s) => ({
-        date: s.date,
-        type: s.type,
-        duration: s.duration,
-        points: s.points,
-        penalties: s.penalties,
-        incidents: s.incidents,
+        data: s.date,
+        tipus: s.type,
+        minuts: s.duration,
+        punts: s.points,
+        penalitzacions: s.penalties,
+        incidencies: s.incidents,
         notes: s.notes,
-        data: s.data,
+        registre: s.data,
     }));
 
     return [
