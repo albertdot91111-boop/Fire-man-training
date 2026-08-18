@@ -10,11 +10,14 @@ function monthGrid(sessions) {
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const byDate = {};
-    sessions.forEach((s) => { byDate[s.date] = s.type; });
+    sessions.forEach((s) => {
+        const key = String(s.date || '').slice(0, 10);
+        if (key) byDate[key] = s.type;
+    });
     const cells = [];
     for (let i = 0; i < (start.getDay() + 6) % 7; i += 1) cells.push(null);
     for (let d = 1; d <= days; d += 1) {
-        const key = new Date(now.getFullYear(), now.getMonth(), d).toISOString().slice(0, 10);
+        const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         cells.push({ day: d, key, type: byDate[key] });
     }
     return cells;
@@ -53,13 +56,13 @@ export default function ProgressPage() {
         .slice(0, 12)
         .reverse()
         .map((s) => ({
-            date: s.date.slice(5),
+            date: String(s.date || '').slice(5, 10),
             temps: (Array.isArray(s.data) ? s.data : []).reduce((sum, e) => sum + (Number(e.temps) || 0), 0),
         })), [sessions]);
 
     const maintenanceSeries = useMemo(() => maintenanceEvolution(sessions), [sessions]);
 
-    const weightSeries = weights.slice(0, 30).reverse().map((x) => ({ date: x.date.slice(5), pes: x.weight }));
+    const weightSeries = weights.slice(0, 30).reverse().map((x) => ({ date: String(x.date || '').slice(5, 10), pes: x.weight }));
 
     const addWeight = async (e) => {
         e.preventDefault();
@@ -99,7 +102,7 @@ export default function ProgressPage() {
                         <div
                             key={c ? c.key : `e${i}`}
                             className="flex h-10 items-center justify-center rounded-lg text-sm font-bold"
-                            style={{ backgroundColor: c?.type ? TYPES[c.type].soft : '#f8fafc', color: c?.type ? TYPES[c.type].color : '#94a3b8' }}
+                            style={{ backgroundColor: c?.type ? TYPES[c.type]?.soft || '#e2e8f0' : '#f8fafc', color: c?.type ? TYPES[c.type]?.color || '#475569' : '#94a3b8' }}
                         >
                             {c ? c.day : ''}
                         </div>
@@ -122,7 +125,7 @@ export default function ProgressPage() {
                                 <Line type="monotone" dataKey="temps" stroke="#dc2626" strokeWidth={3} dot={false} />
                             </LineChart>
                         </ResponsiveContainer>
-                    ) : <p className="text-sm text-slate-400">Encara no hi ha temps d&apos;incendi estructural registrats.</p>}
+                    ) : <p className="text-sm text-slate-400">Encara no hi ha temps d'incendi estructural registrats.</p>}
                 </div>
             </section>
 
@@ -181,7 +184,7 @@ export default function ProgressPage() {
                                 <Line type="monotone" dataKey="pes" stroke="#2563eb" strokeWidth={3} dot={false} />
                             </LineChart>
                         </ResponsiveContainer>
-                    ) : <p className="text-sm text-slate-400">Registra el teu pes per veure l&apos;evolució dels últims 30 dies.</p>}
+                    ) : <p className="text-sm text-slate-400">Registra el teu pes per veure l'evolució dels últims 30 dies.</p>}
                 </div>
             </section>
 
