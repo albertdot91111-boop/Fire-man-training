@@ -13,11 +13,11 @@ const FIELD_LABELS = {
     pes: 'Pes (kg)',
     reps: 'Repeticions',
     series: 'Sèries',
-    temps: 'Temps (min:s)',
+    temps: 'Temps (min)',
     descans: 'Descans (s)',
-    tram1: 'Tram 1 (min:s)',
-    tram2: 'Tram 2 (min:s)',
-    tram3: 'Tram 3 (min:s)',
+    tram1: 'Tram 1 (min)',
+    tram2: 'Tram 2 (min)',
+    tram3: 'Tram 3 (min)',
 };
 
 export default function TrainPage() {
@@ -101,7 +101,7 @@ export default function TrainPage() {
 
             <div className="rounded-3xl p-5" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}>
                 <p className="text-xs font-bold tracking-widest" style={{ color: t.color }}>{t.short}</p>
-                <p className="mt-1 text-sm font-medium text-slate-700">Registra el que has fet. No busquem entrenaments perfectes, busquem acumular feina útil.</p>
+                <p className="mt-1 text-sm font-medium text-slate-700">Registra el que has fet. Els camps de temps accepten minuts decimals (3.5) o min:seg (3:30).</p>
             </div>
 
             {isMaintenance && (
@@ -132,27 +132,14 @@ export default function TrainPage() {
                             <>
                                 <label className="grid gap-1 text-sm font-semibold">
                                     Exercici
-                                    <input
-                                        type="text"
-                                        value={exerciseNames[i] ?? p.name}
-                                        onChange={(e) => setExerciseName(i, e.target.value)}
-                                        className="min-h-[48px] rounded-xl border border-slate-300 px-3 font-extrabold"
-                                    />
+                                    <input type="text" value={exerciseNames[i] ?? p.name} onChange={(e) => setExerciseName(i, e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3 font-extrabold" />
                                 </label>
                                 <p className="mt-2 text-sm text-slate-500">{p.detail}</p>
                                 <div className="mt-3 grid grid-cols-3 gap-2">
                                     {Array.from({ length: maintenanceSeriesCount(Number(duration)) }, (_, seriesIndex) => (
                                         <label key={seriesIndex} className="grid gap-1 text-xs font-bold text-slate-500">
                                             Sèrie {seriesIndex + 1}
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                inputMode="numeric"
-                                                data-testid={`maintenance-series-${i + 1}-${seriesIndex + 1}`}
-                                                value={entries[i]?.series?.[seriesIndex] ?? ''}
-                                                onChange={(e) => setMaintenanceSeries(i, seriesIndex, e.target.value)}
-                                                className="min-h-[52px] w-full rounded-xl border border-slate-300 px-3 text-base font-extrabold text-slate-900"
-                                            />
+                                            <input type="number" min="0" inputMode="numeric" data-testid={`maintenance-series-${i + 1}-${seriesIndex + 1}`} value={entries[i]?.series?.[seriesIndex] ?? ''} onChange={(e) => setMaintenanceSeries(i, seriesIndex, e.target.value)} className="min-h-[52px] w-full rounded-xl border border-slate-300 px-3 text-base font-extrabold text-slate-900" />
                                         </label>
                                     ))}
                                 </div>
@@ -165,15 +152,7 @@ export default function TrainPage() {
                                     {p.fields.map((f) => (
                                         <label key={f} className="grid gap-1 text-sm font-semibold capitalize">
                                             {FIELD_LABELS[f] || f}
-                                            <input
-                                                type={TIME_FIELDS.has(f) ? 'text' : 'number'}
-                                                inputMode={TIME_FIELDS.has(f) ? 'decimal' : 'decimal'}
-                                                placeholder={TIME_FIELDS.has(f) ? 'ex. 3:05' : undefined}
-                                                data-testid={`train-field-${i}-${f}`}
-                                                value={entries[i]?.[f] ?? ''}
-                                                onChange={(e) => setField(i, f, e.target.value)}
-                                                className="min-h-[48px] rounded-xl border border-slate-300 px-3"
-                                            />
+                                            <input type={TIME_FIELDS.has(f) ? 'text' : 'number'} inputMode="decimal" placeholder={TIME_FIELDS.has(f) ? 'ex. 3.5 o 3:30' : undefined} data-testid={`train-field-${i}-${f}`} value={entries[i]?.[f] ?? ''} onChange={(e) => setField(i, f, e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" />
                                         </label>
                                     ))}
                                 </div>
@@ -187,54 +166,20 @@ export default function TrainPage() {
                 {isMaintenance ? (
                     <p className="text-sm font-semibold">Durada seleccionada: <strong>{duration} min</strong></p>
                 ) : (
-                    <label className="grid gap-1 text-sm font-semibold">
-                        Durada total (min)
-                        <input type="number" value={duration} onChange={(e) => setDuration(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" />
-                    </label>
+                    <label className="grid gap-1 text-sm font-semibold">Durada total (min)<input type="number" step="0.1" value={duration} onChange={(e) => setDuration(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /></label>
                 )}
                 <div>
                     <p className="text-sm font-semibold">Incidències</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        {INCIDENTS.map((name) => (
-                            <button
-                                key={name}
-                                type="button"
-                                onClick={() => toggleIncident(name)}
-                                className={`min-h-[44px] rounded-xl px-4 text-sm font-semibold ${incidents.includes(name) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
-                            >
-                                {name}
-                            </button>
-                        ))}
-                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">{INCIDENTS.map((name) => <button key={name} type="button" onClick={() => toggleIncident(name)} className={`min-h-[44px] rounded-xl px-4 text-sm font-semibold ${incidents.includes(name) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}>{name}</button>)}</div>
                 </div>
-                <label className="grid gap-1 text-sm font-semibold">
-                    Notes
-                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="rounded-xl border border-slate-300 p-3" />
-                </label>
+                <label className="grid gap-1 text-sm font-semibold">Notes<textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="rounded-xl border border-slate-300 p-3" /></label>
                 {error && <p className="text-sm text-red-600">{error}</p>}
                 <div className="grid gap-2 sm:grid-cols-3">
                     {!isMaintenance && <button type="button" data-testid="train-save-complet" disabled={busy} onClick={() => save('complet')} className="min-h-[52px] rounded-xl bg-slate-900 font-bold text-white active:scale-[0.98]">Complet +100</button>}
                     <button type="button" data-testid="train-save-manteniment" disabled={busy} onClick={() => save('manteniment')} className="min-h-[52px] rounded-xl bg-yellow-400 font-bold text-slate-900 active:scale-[0.98]">{isMaintenance ? 'Guardar manteniment +40' : 'Manteniment +40'}</button>
                     <button type="button" data-testid="train-save-minim" disabled={busy} onClick={() => save('minim')} className="min-h-[52px] rounded-xl bg-slate-100 font-bold text-slate-700 active:scale-[0.98]">{isMaintenance ? 'Guardar mínim +20' : 'Mínim +20'}</button>
                 </div>
-                <button
-                    type="button"
-                    disabled={busy}
-                    onClick={async () => {
-                        setBusy(true);
-                        try {
-                            await pb.collection('bt_sessions').create({ type: 'descans', date: today(), points: 0, notes: 'Dia no disponible', owner: pb.authStore.record.id });
-                            navigate('/');
-                        } catch (err) {
-                            setError(err?.message || 'Error');
-                        } finally {
-                            setBusy(false);
-                        }
-                    }}
-                    className="w-full min-h-[48px] rounded-xl border border-slate-300 font-semibold text-slate-600"
-                >
-                    Marcar avui com a dia no disponible
-                </button>
+                <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await pb.collection('bt_sessions').create({ type: 'descans', date: today(), points: 0, notes: 'Dia no disponible', owner: pb.authStore.record.id }); navigate('/'); } catch (err) { setError(err?.message || 'Error'); } finally { setBusy(false); } }} className="w-full min-h-[48px] rounded-xl border border-slate-300 font-semibold text-slate-600">Marcar avui com a dia no disponible</button>
             </section>
         </AppShell>
     );
