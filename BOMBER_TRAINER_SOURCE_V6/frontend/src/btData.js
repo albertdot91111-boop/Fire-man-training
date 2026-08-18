@@ -61,6 +61,54 @@ export const INCIDENTS = ['Caiguda', 'Fatiga', 'Dolor', 'Material insuficient', 
 
 export const POINTS = { complet: 100, manteniment: 40, minim: 20 };
 
+// Barem PROVISIONAL estimat a partir de les dades que tenim ara.
+// NO és el barem oficial: forestal 10 ≈ 3:10 i urbà/estructural 10 ≈ 2:10.
+// Quan tinguem el barem real, només cal substituir aquests temps.
+export const PHYSICAL_BAREMS = {
+    forestal: { 5: 240, 6: 225, 7: 215, 8: 205, 9: 195, 10: 190 },
+    estructural: { 5: 180, 6: 165, 7: 155, 8: 145, 9: 135, 10: 130 },
+};
+
+export function formatTime(totalSeconds) {
+    const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
+    return `${minutes}:${String(rest).padStart(2, '0')}`;
+}
+
+export function parseTime(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const text = String(value ?? '').trim();
+    if (!text) return 0;
+    if (text.includes(':')) {
+        const [m, s = '0'] = text.split(':');
+        const minutes = Number(m);
+        const seconds = Number(s);
+        return Number.isFinite(minutes) && Number.isFinite(seconds) ? (minutes * 60) + seconds : 0;
+    }
+    return Number(text) || 0;
+}
+
+export function gradeForTime(type, totalSeconds) {
+    const barem = PHYSICAL_BAREMS[type];
+    const time = Number(totalSeconds);
+    if (!barem || !Number.isFinite(time) || time <= 0) return null;
+    const grades = Object.keys(barem).map(Number).sort((a, b) => a - b);
+    if (time <= barem[grades[grades.length - 1]]) return 10;
+    if (time >= barem[grades[0]]) return grades[0];
+    for (let i = 0; i < grades.length - 1; i += 1) {
+        const lowGrade = grades[i];
+        const highGrade = grades[i + 1];
+        const slow = barem[lowGrade];
+        const fast = barem[highGrade];
+        if (time <= slow && time >= fast) {
+            const ratio = (slow - time) / (slow - fast);
+            return Math.round((lowGrade + ratio * (highGrade - lowGrade)) * 10) / 10;
+        }
+    }
+    return grades[0];
+}
+
 export const LEVELS = [
     { name: 'Aspirant', min: 0 },
     { name: 'Preparació', min: 600 },
@@ -126,7 +174,6 @@ export function streak(sessions) {
         const key = cursor.toISOString().slice(0, 10);
         if (days.has(key)) count += 1;
         else if (rest.has(key) || (i === 0 && !days.has(key))) {
-            // dies no disponibles o avui encara sense entrenar no trenquen la ratxa
         } else break;
         cursor.setDate(cursor.getDate() - 1);
     }
