@@ -10,9 +10,9 @@ const TODAY_ACTIONS = [
     { label: '🌲 ESPECÍFIC', to: '/entrena/forestal', type: 'forestal', detail: 'Incendi forestal' },
     { label: '🌊 AQUÀTICA', to: '/entrena/aquatic', type: 'aquatic', detail: 'Prova INEFC · apnea · salvament · remolc' },
     { label: '🏋️ PRESS BANCA', to: '/entrena/pressbanca', type: 'pressbanca', detail: 'Pes · repeticions · sèries' },
-    { label: '⚡ 20 MIN', to: '/ia?minuts=20', type: 'rapid', detail: 'Sessió adaptada' },
-    { label: '⏱️ 10 MIN', to: '/ia?minuts=10', type: 'pit', detail: 'Sessió adaptada' },
-    { label: '🟡 MANTENIMENT', to: '/entrena/manteniment', type: 'manteniment', detail: 'Mou-te i mantén la base' },
+    { label: '⚡ 20 MIN', to: '/entrena/manteniment?durada=20', type: 'manteniment', detail: 'Sessió directa · 4 sèries · sense material' },
+    { label: '⏱️ 10 MIN', to: '/entrena/manteniment?durada=10', type: 'manteniment', detail: 'Sessió directa · 3 sèries · sense material' },
+    { label: '🟡 MANTENIMENT', to: '/entrena/manteniment', type: 'manteniment', detail: 'Tria la durada i registra el que facis' },
     { label: '🤖 RECOMANACIÓ', to: '/ia', type: 'forestal', id: 'recomanacio', detail: 'Decideix per tu' },
     { label: '⏸️ AVUI NO PUC ENTRENAR', to: '/entrena/descans', type: 'descans', detail: 'Registra el dia' },
 ];
