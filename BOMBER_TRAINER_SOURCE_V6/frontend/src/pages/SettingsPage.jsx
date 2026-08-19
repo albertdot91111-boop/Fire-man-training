@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Helmet from 'react-helmet';
+import { useNavigate } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,6 +15,7 @@ export default function SettingsPage() {
     const [suuntoType, setSuuntoType] = useState('forestal');
     const [suuntoBusy, setSuuntoBusy] = useState(false);
     const [suuntoMetrics, setSuuntoMetrics] = useState(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         pb.collection('bt_settings').getFullList().then((rows) => {
@@ -113,7 +115,7 @@ export default function SettingsPage() {
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm">
                 <h2 className="text-lg font-extrabold">Perfil</h2>
                 <p className="mt-1 text-sm text-slate-500">{user?.email}</p>
-                <button type="button" onClick={() => logout()} className="mt-4 min-h-[48px] w-full rounded-xl border border-slate-300 font-semibold text-slate-600">Tancar sessió</button>
+                <button type="button" onClick={() => { logout(); navigate('/login', { replace: true }); }} className="mt-4 min-h-[48px] w-full rounded-xl border border-slate-300 font-semibold text-slate-600">Tancar sessió</button>
             </section>
         </AppShell>
     );
