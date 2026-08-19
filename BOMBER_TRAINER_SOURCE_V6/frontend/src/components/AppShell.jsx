@@ -29,7 +29,7 @@ export default function AppShell({ title, children }) {
             <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-200">
                 <div className="mx-auto max-w-3xl px-4 py-3 flex items-center gap-3">
                     <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl shadow-sm ring-1 ring-slate-200 bg-slate-900">
-                        <img src="/bomber-icon-exact.svg?v=12" alt="BOMBER TRAINER" className="h-full w-full object-cover" />
+                        <img src="/bomber-icon-original.svg?v=13" alt="BOMBER TRAINER" className="h-full w-full object-cover" />
                     </div>
                     <div className="min-w-0">
                         <p className="text-xs font-bold tracking-widest text-slate-400">BOMBER TRAINER</p>
