@@ -55,7 +55,7 @@ export const PLANS = {
     manteniment: [
         { name: 'Dominades', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
         { name: 'Flexions', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
-        { name: 'Planxa / abdominals', detail: 'Segons per sèrie · pots fer planxa o abdominals', fields: ['series'] },
+        { name: 'Planxa / abdominals', detail: 'Segons o repeticions per sèrie · tria planxa o abdominals', fields: ['series'] },
         { name: 'Sentadilles', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
         { name: 'Gambades', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
     ],
@@ -97,6 +97,7 @@ export function parseTime(value) {
         const seconds = Number(s);
         return Number.isFinite(minutes) && Number.isFinite(seconds) ? (minutes * 60) + seconds : 0;
     }
+    // Els camps de temps de l'app són en minuts. Per posar segons, usa min:s.
     const minutes = Number(text);
     return Number.isFinite(minutes) ? minutes * 60 : 0;
 }
@@ -219,3 +220,12 @@ export function buildUserContext({ sessions, weights, goals, material, minutes }
     return [
         '[DADES DE L\'USUARI]',
         `Ratxa: ${streak(sessions)} dies. Punts totals: ${totalPoints(sessions)}. Nivell: ${levelFor(totalPoints(sessions)).name}.`,
+        `Dies sense treballar: ${['pit', 'cames', 'estructural', 'forestal', 'aquatic', 'manteniment'].map((t) => `${TYPES[t].short}=${daysSince(sessions, t) ?? 'mai'}`).join(', ')}.`,
+        `Material disponible: ${(material && material.length ? material : ['cap indicat']).join(', ')}.`,
+        `Objectius: ${goals.length ? goals.map((g) => `${g.title} (${g.current || 0}/${g.target || 0} ${g.unit || ''})`).join('; ') : 'cap'}.`,
+        `Pes corporal recent: ${weights.slice(0, 5).map((w) => `${w.date}:${w.weight}kg`).join(', ') || 'sense registres'}.`,
+        minutes ? `Temps disponible avui: ${minutes} minuts.` : '',
+        `Últims entrenaments (JSON): ${JSON.stringify(recent)}`,
+        '[FI DADES]',
+    ].filter(Boolean).join('\n');
+}
