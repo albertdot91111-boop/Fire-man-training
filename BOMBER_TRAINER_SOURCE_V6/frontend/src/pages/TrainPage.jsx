@@ -1,13 +1,30 @@
 import React, { useMemo, useState } from 'react';
 import Helmet from 'react-helmet';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
 import { INCIDENTS, PLANS, POINTS, TYPES, formatTime, parseTime, today } from '@/lib/btData';
 
-const MAINTENANCE_MINUTES = [5, 10, 15];
+const MAINTENANCE_MINUTES = [5, 10, 15, 20];
 const TIME_FIELDS = new Set(['temps', 'tram1', 'tram2', 'tram3']);
-const maintenanceSeriesCount = (minutes) => ({ 5: 1, 10: 2, 15: 3 }[minutes] || 2);
+const maintenanceSeriesCount = (minutes) => ({ 5: 1, 10: 2, 15: 3, 20: 4 }[minutes] || 2);
+
+const MAINTENANCE_PRESETS = {
+    10: {
+        Dominades: ['10', '10', '10'],
+        Flexions: ['30', '30', '30'],
+        'Planxa / abdominals': ['30', '30', '30'],
+        Sentadilles: ['30', '30', '30'],
+        Gambades: ['20', '20', '20'],
+    },
+    20: {
+        Dominades: ['10', '10', '10', '10'],
+        Flexions: ['30', '30', '30', '30'],
+        'Planxa / abdominals': ['30', '30', '30', '30'],
+        Sentadilles: ['30', '30', '30', '30'],
+        Gambades: ['20', '20', '20', '20'],
+    },
+};
 
 const FIELD_LABELS = {
     pes: 'Pes (kg)',
@@ -22,12 +39,18 @@ const FIELD_LABELS = {
 
 export default function TrainPage() {
     const { type } = useParams();
+    const [searchParams] = useSearchParams();
     const t = TYPES[type] || TYPES.manteniment;
     const plan = PLANS[t.key] || [];
     const isMaintenance = t.key === 'manteniment';
     const isForestal = t.key === 'forestal';
-    const [duration, setDuration] = useState(() => (isMaintenance ? '10' : ''));
-    const [entries, setEntries] = useState(() => plan.map(() => (isMaintenance ? { series: ['', ''] } : {})));
+    const initialDuration = isMaintenance ? (searchParams.get('durada') || '10') : '';
+    const [duration, setDuration] = useState(initialDuration);
+    const [entries, setEntries] = useState(() => plan.map((p) => {
+        if (!isMaintenance) return {};
+        const preset = MAINTENANCE_PRESETS[Number(initialDuration)]?.[p.name];
+        return { series: preset ? preset.slice(0, maintenanceSeriesCount(Number(initialDuration))) : Array(maintenanceSeriesCount(Number(initialDuration))).fill('') };
+    }));
     const [exerciseNames, setExerciseNames] = useState(() => plan.map((p) => p.name));
     const [incidents, setIncidents] = useState([]);
     const [notes, setNotes] = useState('');
@@ -44,10 +67,17 @@ export default function TrainPage() {
     }));
     const selectMaintenanceMinutes = (minutes) => {
         const count = maintenanceSeriesCount(minutes);
+        const preset = MAINTENANCE_PRESETS[minutes];
         setDuration(String(minutes));
         setEntries((prev) => plan.map((p, index) => {
             const existing = Array.isArray(prev[index]?.series) ? prev[index].series : [];
-            return { ...prev[index], series: Array.from({ length: count }, (_, seriesIndex) => existing[seriesIndex] ?? '') };
+            const recommended = preset?.[exerciseNames[index] || p.name];
+            return {
+                ...prev[index],
+                series: recommended
+                    ? recommended.slice(0, count)
+                    : Array.from({ length: count }, (_, seriesIndex) => existing[seriesIndex] ?? ''),
+            };
         }));
     };
     const setExerciseName = (index, value) => setExerciseNames((prev) => prev.map((name, nameIndex) => (nameIndex === index ? value : name)));
@@ -116,14 +146,14 @@ export default function TrainPage() {
 
             <div className="rounded-3xl p-5" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}>
                 <p className="text-xs font-bold tracking-widest" style={{ color: t.color }}>{t.short}</p>
-                <p className="mt-1 text-sm font-medium text-slate-700">Registra el que has fet. Els camps de temps accepten minuts decimals (3.5) o min:seg (3:30).</p>
+                <p className="mt-1 text-sm font-medium text-slate-700">{isMaintenance ? 'Manteniment sense material. A les sessions de 10 i 20 min et proposo directament què fer; pots modificar qualsevol quantitat.' : 'Registra el que has fet. Els camps de temps accepten minuts decimals (3.5) o min:seg (3:30).'}</p>
             </div>
 
             {isMaintenance && (
                 <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm">
                     <p className="text-xs font-bold tracking-widest text-slate-400">TEMPS DISPONIBLE</p>
                     <h2 className="mt-1 text-lg font-extrabold">Tria la durada</h2>
-                    <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div className="mt-3 grid grid-cols-4 gap-2">
                         {MAINTENANCE_MINUTES.map((minutes) => (
                             <button
                                 key={minutes}
@@ -136,7 +166,7 @@ export default function TrainPage() {
                             </button>
                         ))}
                     </div>
-                    <p className="mt-3 text-sm text-slate-500">{maintenanceSeriesCount(Number(duration))} {maintenanceSeriesCount(Number(duration)) === 1 ? 'sèrie' : 'sèries'} per exercici. Pots canviar el nom i cada quantitat.</p>
+                    <p className="mt-3 text-sm text-slate-500">{maintenanceSeriesCount(Number(duration))} {maintenanceSeriesCount(Number(duration)) === 1 ? 'sèrie' : 'sèries'} per exercici. Les sessions directes de 10/20 min venen ja omplertes amb una proposta i la pots modificar.</p>
                 </section>
             )}
 
@@ -150,14 +180,15 @@ export default function TrainPage() {
                                     <input type="text" value={exerciseNames[i] ?? p.name} onChange={(e) => setExerciseName(i, e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3 font-extrabold" />
                                 </label>
                                 <p className="mt-2 text-sm text-slate-500">{p.detail}</p>
-                                <div className="mt-3 grid grid-cols-3 gap-2">
+                                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                                     {Array.from({ length: maintenanceSeriesCount(Number(duration)) }, (_, seriesIndex) => (
                                         <label key={seriesIndex} className="grid gap-1 text-xs font-bold text-slate-500">
-                                            Sèrie {seriesIndex + 1}
-                                            <input type="number" min="0" inputMode="numeric" data-testid={`maintenance-series-${i + 1}-${seriesIndex + 1}`} value={entries[i]?.series?.[seriesIndex] ?? ''} onChange={(e) => setMaintenanceSeries(i, seriesIndex, e.target.value)} className="min-h-[52px] w-full rounded-xl border border-slate-300 px-3 text-base font-extrabold text-slate-900" />
+                                            {p.name === 'Planxa / abdominals' ? `Sèrie ${seriesIndex + 1} (s/reps)` : `Sèrie ${seriesIndex + 1}`}
+                                            <input type="text" inputMode="numeric" data-testid={`maintenance-series-${i + 1}-${seriesIndex + 1}`} value={entries[i]?.series?.[seriesIndex] ?? ''} onChange={(e) => setMaintenanceSeries(i, seriesIndex, e.target.value)} className="min-h-[52px] w-full rounded-xl border border-slate-300 px-3 text-base font-extrabold text-slate-900" />
                                         </label>
                                     ))}
                                 </div>
+                                {(Number(duration) === 10 || Number(duration) === 20) && <p className="mt-2 text-xs font-bold text-amber-700">Proposta {duration} min: {p.name === 'Planxa / abdominals' ? '30 segons de planxa per sèrie' : `${MAINTENANCE_PRESETS[Number(duration)][p.name]?.[0] || ''} repeticions per sèrie`}</p>}
                             </>
                         ) : isForestal && p.name === 'CIRCUIT COMPLET' ? (
                             <>
