@@ -22,9 +22,21 @@ export default function TrainPage() {
     const isMaintenance = t.key === 'manteniment';
     const isForestal = t.key === 'forestal';
     const initialDuration = isMaintenance ? (searchParams.get('durada') || '5') : '';
+
+    // Manteniment: traiem les gambades i afegim treball amb material que ja tens.
+    const maintenancePlan = isMaintenance
+        ? [
+            ...plan.filter((p) => !/gambad/i.test(p.name)),
+            { name: 'Slam ball', detail: 'Llançaments al terra (slam ball). Registra repeticions per sèrie.' },
+            { name: 'Pujada i baixada de caixa (step-up)', detail: 'Pujar i baixar la caixa de fusta de forma controlada. Alterna cames; registra repeticions per sèrie.' },
+        ]
+        : plan;
+    const activePlan = isMaintenance ? maintenancePlan : plan;
+
     const [duration, setDuration] = useState(initialDuration);
-    const [entries, setEntries] = useState(() => plan.map(() => isMaintenance ? { series: Array(maintenanceSeriesCount(Number(initialDuration))).fill('') } : {}));
-    const [exerciseNames, setExerciseNames] = useState(() => plan.map((p) => p.name));
+    const [entries, setEntries] = useState(() => activePlan.map(() => isMaintenance ? { series: Array(maintenanceSeriesCount(Number(initialDuration))).fill('') } : {}));
+    const [exerciseNames, setExerciseNames] = useState(() => activePlan.map((p) => p.name));
+    const [maintenanceWeights, setMaintenanceWeights] = useState(() => activePlan.map(() => ''));
     const [incidents, setIncidents] = useState([]);
     const [notes, setNotes] = useState('');
     const [busy, setBusy] = useState(false);
@@ -41,12 +53,13 @@ export default function TrainPage() {
     const selectMaintenanceMinutes = (minutes) => {
         const count = maintenanceSeriesCount(minutes);
         setDuration(String(minutes));
-        setEntries((prev) => plan.map((p, index) => {
+        setEntries((prev) => activePlan.map((p, index) => {
             const existing = Array.isArray(prev[index]?.series) ? prev[index].series : [];
             return { ...prev[index], series: Array.from({ length: count }, (_, seriesIndex) => existing[seriesIndex] ?? '') };
         }));
     };
     const setExerciseName = (index, value) => setExerciseNames((prev) => prev.map((name, nameIndex) => nameIndex === index ? value : name));
+    const setMaintenanceWeight = (index, value) => setMaintenanceWeights((prev) => prev.map((weight, weightIndex) => weightIndex === index ? value : weight));
     const toggleIncident = (name) => setIncidents((prev) => prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]);
     const forestalTotalSeconds = useMemo(() => isForestal ? entries.slice(0, 3).reduce((sum, entry) => sum + parseTime(entry?.temps), 0) : 0, [entries, isForestal]);
 
@@ -55,12 +68,16 @@ export default function TrainPage() {
         try {
             const points = kind === 'complet' ? POINTS.complet : kind === 'manteniment' ? POINTS.manteniment : POINTS.minim;
             const seriesCount = maintenanceSeriesCount(Number(duration));
-            const data = plan.map((p, i) => {
+            const data = activePlan.map((p, i) => {
                 if (!isMaintenance) {
                     if (isForestal && p.name === 'CIRCUIT COMPLET') return { exercici: p.name, temps: forestalTotalSeconds, tram1: parseTime(entries[0]?.temps), tram2: parseTime(entries[1]?.temps), tram3: parseTime(entries[2]?.temps) };
                     return Object.fromEntries(Object.entries({ exercici: p.name, ...entries[i] }).map(([key, value]) => [key, TIME_FIELDS.has(key) ? parseTime(value) : value]));
                 }
-                return { exercici: exerciseNames[i].trim() || p.name, series: (Array.isArray(entries[i]?.series) ? entries[i].series : []).slice(0, seriesCount).map((value) => String(value ?? '').trim()) };
+                return {
+                    exercici: exerciseNames[i].trim() || p.name,
+                    llastKg: String(maintenanceWeights[i] ?? '').trim(),
+                    series: (Array.isArray(entries[i]?.series) ? entries[i].series : []).slice(0, seriesCount).map((value) => String(value ?? '').trim()),
+                };
             });
             if (isMaintenance && !data.some((entry) => entry.series.some((value) => value !== ''))) { setError('Registra almenys una sèrie abans de guardar.'); return; }
             await pb.collection('bt_sessions').create({ type: t.key, date: today(), duration: isForestal ? forestalTotalSeconds / 60 : Number(duration) || 0, points: t.key === 'descans' ? 0 : points, incidents: incidents.join(', '), notes, data, owner: pb.authStore.record.id });
@@ -74,7 +91,7 @@ export default function TrainPage() {
             <Helmet><title>{`${t.label} — BOMBER TRAINER`}</title><meta name="description" content={`Registra el teu entrenament de ${t.label.toLowerCase()}: sèries, pesos, temps i descansos.`} /></Helmet>
             <div className="rounded-3xl p-5" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}>
                 <p className="text-xs font-bold tracking-widest" style={{ color: t.color }}>{t.short}</p>
-                <p className="mt-1 text-sm font-medium text-slate-700">{isMaintenance ? 'Manteniment sense material. Tria la durada i introdueix manualment els exercicis i les sèries que hagis fet.' : 'Registra el que has fet. Els camps de temps accepten minuts decimals (3.5) o min:seg (3:30).'}</p>
+                <p className="mt-1 text-sm font-medium text-slate-700">{isMaintenance ? 'Manteniment flexible. Tria la durada i registra els exercicis, sèries i, si vols, el pes de llast.' : 'Registra el que has fet. Els camps de temps accepten minuts decimals (3.5) o min:seg (3:30).'}</p>
             </div>
 
             {isMaintenance && <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm">
@@ -87,10 +104,11 @@ export default function TrainPage() {
             </section>}
 
             <section className="space-y-3">
-                {plan.map((p, i) => <div key={p.name} className="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm">
+                {activePlan.map((p, i) => <div key={`${p.name}-${i}`} className="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm">
                     {isMaintenance ? <>
                         <label className="grid gap-1 text-sm font-semibold">Exercici<input type="text" value={exerciseNames[i] ?? p.name} onChange={(e) => setExerciseName(i, e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3 font-extrabold" /></label>
                         <p className="mt-2 text-sm text-slate-500">{p.detail}</p>
+                        <label className="mt-3 grid gap-1 text-sm font-semibold">Pes llast (kg) <span className="text-xs font-normal text-slate-400">Opcional</span><input type="number" min="0" step="0.5" inputMode="decimal" placeholder="Sense llast" value={maintenanceWeights[i] ?? ''} onChange={(e) => setMaintenanceWeight(i, e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /></label>
                         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                             {Array.from({ length: maintenanceSeriesCount(Number(duration)) }, (_, seriesIndex) => <label key={seriesIndex} className="grid gap-1 text-xs font-bold text-slate-500">{p.name === 'Planxa / abdominals' ? `Sèrie ${seriesIndex + 1} (s/reps)` : `Sèrie ${seriesIndex + 1}`}<input type="text" inputMode="numeric" data-testid={`maintenance-series-${i + 1}-${seriesIndex + 1}`} value={entries[i]?.series?.[seriesIndex] ?? ''} onChange={(e) => setMaintenanceSeries(i, seriesIndex, e.target.value)} className="min-h-[52px] w-full rounded-xl border border-slate-300 px-3 text-base font-extrabold text-slate-900" /></label>)}
                         </div>
