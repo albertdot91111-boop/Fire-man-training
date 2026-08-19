@@ -7,7 +7,7 @@ import { INCIDENTS, PLANS, POINTS, TYPES, formatTime, parseTime, today } from '@
 
 const MAINTENANCE_MINUTES = [5, 10, 15, 20];
 const TIME_FIELDS = new Set(['temps', 'tram1', 'tram2', 'tram3']);
-const maintenanceSeriesCount = (minutes) => ({ 5: 1, 10: 2, 15: 3, 20: 4 }[minutes] || 2);
+const maintenanceSeriesCount = (minutes) => ({ 5: 1, 10: 3, 15: 3, 20: 4 }[minutes] || 3);
 
 const MAINTENANCE_PRESETS = {
     10: {
