@@ -1,18 +1,18 @@
 {
-  "id": "/?app=bomber-trainer-icon-v19",
+  "id": "/?app=bomber-trainer-icon-v20",
   "name": "BOMBER TRAINER",
   "short_name": "BOMBER TRAINER",
   "description": "Entrenament i seguiment per a opositors a bomber",
   "lang": "ca",
-  "start_url": "/?app=bomber-trainer-icon-v19",
+  "start_url": "/?app=bomber-trainer-icon-v20",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#07090d",
   "theme_color": "#07090d",
   "icons": [{
-    "src": "/bomber-icon-exact.svg?v=19",
-    "sizes": "512x512",
+    "src": "/bomber-icon-embedded-v9.svg?v=20",
+    "sizes": "256x256",
     "type": "image/svg+xml",
     "purpose": "any maskable"
   }]
