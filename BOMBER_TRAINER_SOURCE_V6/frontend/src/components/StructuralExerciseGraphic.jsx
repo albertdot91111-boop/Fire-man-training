@@ -21,32 +21,26 @@ function Arrow({ x1, y1, x2, y2, color = accent }) {
 
 export default function StructuralExerciseGraphic({ kind }) {
   const label = {
-    discos: 'DISCOS · 2 × 10 kg',
-    kettlebells: 'KETTLEBELLS · 2 × 16 kg',
-    trineu: 'TRINEU · 10 m + 10 m',
-    c: 'RECORREGUT EN C · SOTA TANQUES',
-    maniqui: 'ARROSSEGAMENT · MANIQUÍ 50 kg',
-    sprint: 'ESPRINT FINAL · 10 m',
-  }[kind] || 'ESTRUCTURAL';
+    discos: 'Discos',
+    kettlebells: 'Kettlebells',
+    trineu: 'Trineu',
+    c: 'Recorregut en C',
+    maniqui: 'Maniquí',
+    sprint: 'Esprint final',
+  }[kind] || 'Estructural';
 
   return <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-inner">
     <svg {...base} aria-label={label}>
       <rect x="0" y="0" width="420" height="190" rx="18" fill={light} />
-      <text x="20" y="28" fontSize="13" fontWeight="900" fill="#475569" letterSpacing="1">{label}</text>
 
       {kind === 'discos' && <g>
         <path d="M25 148 H395" stroke={muted} strokeWidth="5" />
         <Person x={115} y={121} />
         <circle cx="92" cy="101" r="17" fill="#334155" /><circle cx="145" cy="101" r="17" fill="#334155" />
         <path d="M92 101 L115 72 L145 101" fill="none" stroke={accent} strokeWidth="5" />
-        <text x="72" y="177" fontSize="11" fontWeight="800" fill="#64748b">TRANSPORT</text>
         <rect x="285" y="108" width="55" height="40" rx="5" fill="#e2e8f0" stroke={stroke} strokeWidth="5" />
         <path d="M312 108 V75" stroke={stroke} strokeWidth="5" />
         <Arrow x1="272" y1="70" x2="272" y2="105" color={green} />
-        <text x="295" y="177" fontSize="11" fontWeight="800" fill={green}>STEP-UP</text>
-        <path d="M65 54 H165" stroke={accent} strokeWidth="4" />
-        <path d="M65 54 l10-7 M65 54 l10 7 M165 54 l-10-7 M165 54 l-10 7" stroke={accent} strokeWidth="3" />
-        <text x="82" y="45" fontSize="11" fill={accent} fontWeight="900">2 × 10 kg</text>
       </g>}
 
       {kind === 'kettlebells' && <g>
@@ -59,7 +53,6 @@ export default function StructuralExerciseGraphic({ kind }) {
         </g>
         <Arrow x1="140" y1="65" x2="156" y2="88" />
         <Arrow x1="275" y1="65" x2="257" y2="88" />
-        <text x="158" y="177" fontSize="12" fontWeight="900" fill={orange}>2 × 16 kg · TRANSPORT</text>
       </g>}
 
       {kind === 'trineu' && <g>
@@ -71,9 +64,7 @@ export default function StructuralExerciseGraphic({ kind }) {
         </g>
         <Person x={142} y={123} facing={-1} />
         <Arrow x1="112" y1="91" x2="62" y2="91" />
-        <text x="55" y="76" fontSize="12" fontWeight="900" fill={accent}>ESTIRAR 10 m</text>
         <Arrow x1="290" y1="76" x2="355" y2="76" color={green} />
-        <text x="292" y="61" fontSize="12" fontWeight="900" fill={green}>EMPÈNYER 10 m</text>
       </g>}
 
       {kind === 'c' && <g>
@@ -82,8 +73,6 @@ export default function StructuralExerciseGraphic({ kind }) {
         <Person x={120} y={109} scale={0.72} />
         <Arrow x1="135" y1="99" x2="180" y2="99" />
         <Arrow x1="275" y1="99" x2="320" y2="99" />
-        <text x="161" y="48" fontSize="13" fontWeight="900" fill={orange}>SOTA LES TANQUES</text>
-        <text x="105" y="172" fontSize="11" fontWeight="800" fill="#64748b">ENTRADA → RECORREGUT EN C → SORTIDA</text>
       </g>}
 
       {kind === 'maniqui' && <g>
@@ -96,8 +85,6 @@ export default function StructuralExerciseGraphic({ kind }) {
         <Arrow x1="135" y1="103" x2="178" y2="112" />
         <path d="M70 62 H230" stroke={accent} strokeWidth="4" />
         <path d="M70 62 l10-7 M70 62 l10 7 M230 62 l-10-7 M230 62 l-10 7" stroke={accent} strokeWidth="3" />
-        <text x="125" y="52" fontSize="12" fill={accent} fontWeight="900">50 kg</text>
-        <text x="139" y="177" fontSize="12" fill="#64748b" fontWeight="900">ARROSSEGAR</text>
       </g>}
 
       {kind === 'sprint' && <g>
@@ -107,8 +94,6 @@ export default function StructuralExerciseGraphic({ kind }) {
         <Arrow x1="150" y1="83" x2="345" y2="83" />
         <path d="M80 58 H350" stroke={accent} strokeWidth="4" />
         <path d="M80 58 l10-6 M80 58 l10 6 M350 58 l-10-6 M350 58 l-10 6" stroke={accent} strokeWidth="3" />
-        <text x="184" y="48" fontSize="14" fill={accent} fontWeight="900">10 m · SPRINT FINAL</text>
-        <text x="171" y="177" fontSize="11" fill="#64748b" fontWeight="800">SORTIDA → MÀXIMA VELOCITAT → META</text>
       </g>}
 
       <defs>
