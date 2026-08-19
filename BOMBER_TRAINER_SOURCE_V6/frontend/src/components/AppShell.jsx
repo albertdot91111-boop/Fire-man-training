@@ -1,13 +1,13 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, LineChart, Bot, Settings } from 'lucide-react';
+import { Home, LineChart, Bot, UserRound } from 'lucide-react';
 import pb from '@/lib/pocketbaseClient';
 
 const NAV = [
     { to: '/', label: 'Avui', Icon: Home },
     { to: '/progres', label: 'Progrés', Icon: LineChart },
     { to: '/ia', label: 'IA', Icon: Bot },
-    { to: '/configuracio', label: 'Perfil', Icon: Settings, profile: true },
+    { to: '/perfil', label: 'Perfil', Icon: UserRound, profile: true },
 ];
 
 function getProfile() {
