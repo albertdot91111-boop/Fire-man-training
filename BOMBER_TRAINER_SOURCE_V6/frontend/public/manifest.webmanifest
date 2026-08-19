@@ -12,7 +12,7 @@
   "theme_color": "#111827",
   "icons": [
     {
-      "src": "/bomber-icon.svg",
+      "src": "/bomber-icon.svg?v=2",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
