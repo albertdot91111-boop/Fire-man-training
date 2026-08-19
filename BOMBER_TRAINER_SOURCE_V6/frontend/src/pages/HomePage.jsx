@@ -10,10 +10,7 @@ const TODAY_ACTIONS = [
     { label: '🌲 ESPECÍFIC', to: '/entrena/forestal', type: 'forestal', detail: 'Incendi forestal' },
     { label: '🌊 AQUÀTICA', to: '/entrena/aquatic', type: 'aquatic', detail: 'Prova INEFC · apnea · salvament · remolc' },
     { label: '🏋️ PRESS BANCA', to: '/entrena/pressbanca', type: 'pressbanca', detail: 'Pes · repeticions · sèries' },
-    { label: '⚡ 20 MIN', to: '/entrena/manteniment?durada=20', type: 'manteniment', detail: 'Sessió directa · 4 sèries · sense material' },
-    { label: '⏱️ 10 MIN', to: '/entrena/manteniment?durada=10', type: 'manteniment', detail: 'Sessió directa · 3 sèries · sense material' },
-    { label: '🟡 MANTENIMENT', to: '/entrena/manteniment', type: 'manteniment', detail: 'Tria la durada i registra el que facis' },
-    { label: '🤖 RECOMANACIÓ', to: '/ia', type: 'forestal', id: 'recomanacio', detail: 'Decideix per tu' },
+    { label: '🟡 MANTENIMENT', to: '/entrena/manteniment', type: 'manteniment', detail: 'Tria 5, 10, 15 o 20 min i registra manualment el que facis' },
     { label: '⏸️ AVUI NO PUC ENTRENAR', to: '/entrena/descans', type: 'descans', detail: 'Registra el dia' },
 ];
 
@@ -51,9 +48,9 @@ export default function HomePage() {
                     <span className="hidden shrink-0 text-xs font-bold text-slate-400 sm:block">AVUI</span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                    {TODAY_ACTIONS.map(({ label, to, type, detail, id }) => {
+                    {TODAY_ACTIONS.map(({ label, to, type, detail }) => {
                         const t = TYPES[type];
-                        return <Link key={to} to={to} aria-label={label} data-testid={`link-today-action-${id || type}`} className="group flex min-h-[92px] flex-col justify-between rounded-3xl border border-black/5 p-5 text-left shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}><p className="text-lg font-extrabold leading-tight tracking-tight">{label}</p><p className="mt-3 text-xs font-semibold" style={{ color: t.color }}>{detail}</p></Link>;
+                        return <Link key={to} to={to} aria-label={label} data-testid={`link-today-action-${type}`} className="group flex min-h-[92px] flex-col justify-between rounded-3xl border border-black/5 p-5 text-left shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}><p className="text-lg font-extrabold leading-tight tracking-tight">{label}</p><p className="mt-3 text-xs font-semibold" style={{ color: t.color }}>{detail}</p></Link>;
                     })}
                 </div>
             </section>
