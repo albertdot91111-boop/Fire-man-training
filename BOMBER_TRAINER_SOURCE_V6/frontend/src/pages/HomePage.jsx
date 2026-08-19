@@ -14,21 +14,56 @@ const TODAY_ACTIONS = [
     { label: '⏸️ AVUI NO PUC ENTRENAR', to: '/entrena/descans', type: 'descans', detail: 'Registra el dia' },
 ];
 
+const DAILY_OPTIONS = [
+    { type: 'pressbanca', title: 'Press banca', detail: 'Força específica · treballa tècnica, càrrega i repeticions segons el teu nivell.', to: '/entrena/pressbanca' },
+    { type: 'estructural', title: 'Específic estructural', detail: 'Treball específic de força i resistència per a la prova.', to: '/entrena/estructural' },
+    { type: 'forestal', title: 'Circuit forestal', detail: 'Circuit específic amb control del temps i dels trams.', to: '/entrena/forestal' },
+    { type: 'aquatic', title: 'Aquàtica', detail: 'Apnea, salvament i remolc segons la sessió disponible.', to: '/entrena/aquatic' },
+    { type: 'manteniment', title: 'Manteniment', detail: 'Sessió flexible sense material obligatori.', to: '/entrena/manteniment' },
+];
+
+function daysSince(date) {
+    if (!date) return 999;
+    const d = new Date(date); const now = new Date();
+    return Math.max(0, Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000));
+}
+
+function buildDailyPlan(sessions) {
+    const lastByType = {};
+    sessions.forEach((s) => { if (!lastByType[s.type]) lastByType[s.type] = s; });
+    return [...DAILY_OPTIONS].sort((a, b) => daysSince(lastByType[b.type]?.date) - daysSince(lastByType[a.type]?.date)).slice(0, 3);
+}
+
 export default function HomePage() {
     const [sessions, setSessions] = useState([]);
+    const [dailyPlan, setDailyPlan] = useState(() => {
+        try { const saved = localStorage.getItem('bt_daily_plan'); return saved ? JSON.parse(saved) : []; } catch { return []; }
+    });
 
     useEffect(() => {
         const owner = pb.authStore.record?.id;
-        if (!owner) {
-            setSessions([]);
-            return;
-        }
+        if (!owner) { setSessions([]); return; }
         pb.collection('bt_sessions')
             .getFullList({ sort: '-date', filter: `owner = "${owner}"` })
-            .then(setSessions)
+            .then((data) => {
+                setSessions(data);
+                try {
+                    const saved = JSON.parse(localStorage.getItem('bt_daily_plan') || 'null');
+                    const todayKey = new Date().toISOString().slice(0, 10);
+                    if (!saved || saved.date !== todayKey) setDailyPlan([]);
+                } catch { setDailyPlan([]); }
+            })
             .catch(() => setSessions([]));
     }, []);
 
+    const generateDailyPlan = () => {
+        const plan = buildDailyPlan(sessions);
+        const payload = { date: new Date().toISOString().slice(0, 10), items: plan, generatedAt: new Date().toISOString() };
+        localStorage.setItem('bt_daily_plan', JSON.stringify(payload));
+        setDailyPlan(payload);
+    };
+
+    const planItems = Array.isArray(dailyPlan) ? dailyPlan : dailyPlan.items || [];
     const points = totalPoints(sessions);
     const level = levelFor(points);
     const next = nextLevel(points);
@@ -41,6 +76,14 @@ export default function HomePage() {
                 <title>Què puc fer avui? — BOMBER TRAINER</title>
                 <meta name="description" content="Entrenaments diaris per a opositors de Bombers: incendi estructural, forestal, aquàtica, força i manteniment." />
             </Helmet>
+
+            <section className="rounded-3xl bg-slate-900 p-5 text-white shadow-sm" aria-labelledby="daily-plan-heading">
+                <div className="flex items-start justify-between gap-4">
+                    <div><p className="text-xs font-bold tracking-[0.18em] text-slate-300">ENTRENAMENT D'AVUI</p><h2 id="daily-plan-heading" className="mt-1 text-2xl font-extrabold tracking-tight">La sessió te la proposa l'app</h2><p className="mt-2 text-sm text-slate-300">Prioritza allò que fa més temps que no treballes i evita repetir sempre el mateix.</p></div>
+                    <button type="button" onClick={generateDailyPlan} className="shrink-0 rounded-2xl bg-white px-4 py-3 text-sm font-extrabold text-slate-900 active:scale-95">{planItems.length ? 'Regenerar' : 'Generar'}</button>
+                </div>
+                {planItems.length > 0 ? <div className="mt-4 space-y-2">{planItems.map((item, i) => <Link key={`${item.type}-${i}`} to={item.to} className="block rounded-2xl bg-white/10 p-4 hover:bg-white/15"><div className="flex items-center justify-between gap-3"><span className="font-extrabold">{i + 1}. {item.title}</span><span className="text-xs font-bold text-slate-300">FER →</span></div><p className="mt-1 text-sm text-slate-300">{item.detail}</p></Link>)}</div> : <div className="mt-4 rounded-2xl bg-white/10 p-4 text-sm text-slate-300">Prem <strong className="text-white">Generar</strong> i guardaré la proposta d'avui en aquest dispositiu.</div>}
+            </section>
 
             <section aria-labelledby="today-actions-heading">
                 <div className="mb-3 flex items-end justify-between gap-4">
