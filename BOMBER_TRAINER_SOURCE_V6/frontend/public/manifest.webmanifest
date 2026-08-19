@@ -8,12 +8,12 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f8fafc",
-  "theme_color": "#111827",
+  "background_color": "#07090d",
+  "theme_color": "#07090d",
   "icons": [
     {
-      "src": "/bomber-icon.svg?v=2",
-      "sizes": "any",
+      "src": "/bomber-icon.svg?v=3",
+      "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
