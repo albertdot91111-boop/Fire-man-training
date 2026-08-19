@@ -44,7 +44,7 @@ export default function HomePage() {
         const owner = pb.authStore.record?.id;
         if (!owner) { setSessions([]); return; }
         pb.collection('bt_sessions')
-            .getFullList({ sort: '-date', filter: `owner = "${owner}"` })
+            .getFullList({ sort: '-date', filter: `owner = \"${owner}\"` })
             .then((data) => {
                 setSessions(data);
                 try {
@@ -82,7 +82,7 @@ export default function HomePage() {
                     <div><p className="text-xs font-bold tracking-[0.18em] text-slate-300">ENTRENAMENT D'AVUI</p><h2 id="daily-plan-heading" className="mt-1 text-2xl font-extrabold tracking-tight">La sessió te la proposa l'app</h2><p className="mt-2 text-sm text-slate-300">Prioritza allò que fa més temps que no treballes i evita repetir sempre el mateix.</p></div>
                     <button type="button" onClick={generateDailyPlan} className="shrink-0 rounded-2xl bg-white px-4 py-3 text-sm font-extrabold text-slate-900 active:scale-95">{planItems.length ? 'Regenerar' : 'Generar'}</button>
                 </div>
-                {planItems.length > 0 ? <div className="mt-4 space-y-2">{planItems.map((item, i) => <Link key={`${item.type}-${i}`} to={item.to} className="block rounded-2xl bg-white/10 p-4 hover:bg-white/15"><div className="flex items-center justify-between gap-3"><span className="font-extrabold">{i + 1}. {item.title}</span><span className="text-xs font-bold text-slate-300">FER →</span></div><p className="mt-1 text-sm text-slate-300">{item.detail}</p></Link>)}</div> : <div className="mt-4 rounded-2xl bg-white/10 p-4 text-sm text-slate-300">Prem <strong className="text-white">Generar</strong> i guardaré la proposta d'avui en aquest dispositiu.</div>}
+                {planItems.length > 0 ? <div className="mt-4 space-y-2">{planItems.map((item, i) => <Link key={`${item.type}-${i}`} to={item.to} className="block rounded-2xl bg-white/10 p-4 hover:bg-white/15"><div className="flex items-center justify-between gap-3"><span className="font-extrabold">{i + 1}. {item.title}</span><span className="text-xs font-bold text-slate-300">FER →</span></div><p className="mt-1 text-sm text-slate-300">{item.detail}</p></Link>)}</div> : <div className="mt-4 rounded-2xl bg-white/10 p-4 text-sm text-slate-300">Prem <strong className="text-white">Generar</strong> i et mostraré les opcions d'avui.</div>}
             </section>
 
             <section aria-labelledby="today-actions-heading">
