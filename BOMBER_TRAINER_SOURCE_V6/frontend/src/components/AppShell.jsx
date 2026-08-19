@@ -29,7 +29,7 @@ export default function AppShell({ title, children }) {
             <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-200">
                 <div className="mx-auto max-w-3xl px-4 py-3 flex items-center gap-3">
                     <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl shadow-sm ring-1 ring-slate-200 bg-slate-900">
-                        <img src="/bomber-icon-exact.svg?v=11" alt="BOMBER TRAINER" className="h-full w-full object-cover" />
+                        <img src="/bomber-icon-exact.svg?v=12" alt="BOMBER TRAINER" className="h-full w-full object-cover" />
                     </div>
                     <div className="min-w-0">
                         <p className="text-xs font-bold tracking-widest text-slate-400">BOMBER TRAINER</p>
@@ -43,12 +43,7 @@ export default function AppShell({ title, children }) {
                     {NAV.map(({ to, label, Icon, profile: isProfile }) => {
                         const active = pathname === to;
                         return (
-                            <Link
-                                key={to}
-                                to={to}
-                                aria-label={isProfile ? `Perfil de ${profile.name}` : label}
-                                className={`flex min-h-[60px] flex-col items-center justify-center gap-1 text-xs font-semibold ${active ? 'text-slate-900' : 'text-slate-400'}`}
-                            >
+                            <Link key={to} to={to} aria-label={isProfile ? `Perfil de ${profile.name}` : label} className={`flex min-h-[60px] flex-col items-center justify-center gap-1 text-xs font-semibold ${active ? 'text-slate-900' : 'text-slate-400'}`}>
                                 {isProfile ? (
                                     <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-extrabold ${active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700'}`}>
                                         {profile.initials}
@@ -56,7 +51,7 @@ export default function AppShell({ title, children }) {
                                 ) : <Icon className="h-5 w-5" strokeWidth={2} />}
                                 {label}
                             </Link>
-                        );
+                    );
                     })}
                 </div>
             </nav>
