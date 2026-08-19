@@ -7,7 +7,6 @@ import AppShell from '@/components/AppShell';
 import { TYPES, LEVELS, levelFor, nextLevel, streak, totalPoints, formatTime } from '@/lib/btData';
 
 const SPORT_META = [
-    ['pit', 'Pit'],
     ['cames', 'Cames'],
     ['estructural', 'Estructural'],
     ['forestal', 'Forestal'],
