@@ -92,14 +92,29 @@ function buildTodayPlan(focus, minutes, data) {
     if (focus === 'forestal') {
         const t = targetInfo.rows;
         steps = short
-            ? [`Escalfament 6 min`, `2 × Tram 1: objectiu ≤ ${formatTime(t[0].target)}`, `2 × Tram 2: objectiu ≤ ${formatTime(t[1].target)}`, `5 min recuperació`]
-            : [`Escalfament 8 min`, `3 × Tram 2 específic: objectiu ≤ ${formatTime(t[1].target)} per repetició`, `2 × Tram 3 controlat: objectiu ≤ ${formatTime(t[2].target)}`, `1 × circuit complet al 80–90%`, `8 min recuperació`];
+            ? ['Escalfament 6 min', `2 × Tram 1: objectiu ≤ ${formatTime(t[0].target)}`, `2 × Tram 2: objectiu ≤ ${formatTime(t[1].target)}`, '5 min recuperació']
+            : ['Escalfament 8 min', `3 × Tram 2 específic: objectiu ≤ ${formatTime(t[1].target)} per repetició`, `2 × Tram 3 controlat: objectiu ≤ ${formatTime(t[2].target)}`, '1 × circuit complet al 80–90%', '8 min recuperació'];
     } else if (focus === 'estructural') {
         steps = short ? ['Escalfament 6 min', '3 × bloc tècnic amb descans complet', '2 × arrossegament/empenyiment controlat', '5 min recuperació'] : ['Escalfament 10 min', '3 × circuit tècnic', '3 × arrossegament/empenyiment', '1 × circuit complet controlat', '10 min recuperació'];
     } else {
         steps = short ? ['Escalfament 8 min', '4 × 25 m tècnics', '2 × remolc controlat', '5 min recuperació'] : ['Escalfament 10 min', '4 × 25 m tècnics', '3 × treball de remolc', '1 × prova contínua controlada', '10 min recuperació'];
     }
     return { focus, focusName, minutes: mins, material: data.material?.length ? data.material.join(', ') : 'sense material registrat', steps, targetInfo };
+}
+function buildWeeklyPlan(priority, sessions, minutes, data) {
+    const recent = typeSessions(sessions, priority).slice(-2).length;
+    const other = ['forestal', 'estructural', 'aquatic'].filter((x) => x !== priority);
+    const focus = LABELS[priority] || 'Forestal';
+    const days = [
+        { day: 'Dilluns', type: priority, title: `${focus} · treball específic`, detail: buildTodayPlan(priority, minutes, data).steps.slice(0, 3).join(' · ') },
+        { day: 'Dimarts', type: 'recovery', title: 'Recuperació activa', detail: 'Mobilitat + aeròbic suau. No test.' },
+        { day: 'Dimecres', type: other[0], title: `${LABELS[other[0]]} · tècnica`, detail: 'Treball tècnic + volum moderat, sense màxims.' },
+        { day: 'Dijous', type: 'recovery', title: 'Descans / mobilitat', detail: 'Recuperació segons fatiga i dolor.' },
+        { day: 'Divendres', type: priority, title: `${focus} · control`, detail: 'Repetir el punt feble amb objectiu de qualitat i registrar temps.' },
+        { day: 'Dissabte', type: other[1], title: `${LABELS[other[1]]} · capacitat`, detail: 'Sessió específica moderada; evitar dos tests màxims seguits.' },
+        { day: 'Diumenge', type: 'recovery', title: 'Descans', detail: 'Preparar la setmana següent segons resultats.' },
+    ];
+    return { priority, generatedAt: new Date().toISOString(), recentPrioritySessions: recent, days };
 }
 function localCoachAnswer(question, data, minutes) {
     const diagnosis = diagnoseBomberProgress(data.sessions || []);
@@ -139,6 +154,7 @@ export default function AiPage() {
     const [localAnswer, setLocalAnswer] = useState('');
     const [data, setData] = useState({ sessions: [], weights: [], goals: [], material: [] });
     const [savedPlan, setSavedPlan] = useState(null);
+    const [weeklyPlan, setWeeklyPlan] = useState(null);
     const endRef = useRef(null);
 
     useEffect(() => {
@@ -171,9 +187,15 @@ export default function AiPage() {
         localStorage.setItem('bomber-trainer-today-plan', JSON.stringify({ ...plan, savedAt: new Date().toISOString() }));
         setSavedPlan(plan);
     };
+    const adaptWeek = () => {
+        const plan = buildWeeklyPlan(diagnosis.priority || 'forestal', data.sessions, minutes || 45, data);
+        localStorage.setItem('bomber-trainer-week-plan', JSON.stringify(plan));
+        setWeeklyPlan(plan);
+    };
     const simulate = () => {
-        const lines = diagnosis.tests.map((t) => { const g = grade(t.type, t.latestTimeSeconds); return `• ${t.label}: ${formatTime(t.latestTimeSeconds)} → ${g === null ? 'pendent' : `${g.toFixed(1)}/10 orientatiu`}`; });
-        const sim = `### Simulació d'oposició\n\n${lines.join('\n') || 'Encara no hi ha proves registrades.'}\n\n**Preparació global:** ${readiness.score === null ? 'pendent de dades' : `${readiness.score.toFixed(1)}/10`}\n\nAquesta simulació és una fotografia de les marques registrades, no una classificació oficial.`;
+        const physical = diagnosis.tests.map((t) => { const g = grade(t.type, t.latestTimeSeconds); return `• ${t.label}: ${formatTime(t.latestTimeSeconds)} → ${g === null ? 'pendent' : `${g.toFixed(1)}/10 orientatiu`}`; });
+        const strength = ['pit', 'cames', 'pressbanca'].map((type) => { const n = typeSessions(data.sessions, type).length; return `• ${type}: ${n ? `${n} sessió/ns registrades · sense barem oficial` : 'pendent'}`; });
+        const sim = `### Simulació d'oposició\n\n**Proves cronometrades**\n${physical.join('\n') || 'Encara no hi ha proves registrades.'}\n\n**Força**\n${strength.join('\n')}\n\n**Preparació global:** ${readiness.score === null ? 'pendent' : `${readiness.score.toFixed(1)}/10`}\n\nAquesta simulació és una fotografia de les marques registrades. No substitueix la puntuació oficial de la convocatòria.`;
         setLocalAnswer(sim);
     };
     const roadmap = diagnosis.priority ? predictWeeks(data.sessions, diagnosis.priority) : null;
@@ -189,15 +211,17 @@ export default function AiPage() {
             <div className="grid grid-cols-2 gap-2">
                 {QUICK.map((q) => <button key={q} type="button" onClick={() => ask(q)} disabled={isStreaming} className="min-h-[44px] rounded-xl bg-white border border-slate-200 px-3 text-sm font-semibold">{q}</button>)}
                 <button type="button" onClick={saveToday} disabled={isStreaming} className="min-h-[44px] rounded-xl bg-purple-700 px-3 text-sm font-bold text-white">💾 Guardar entrenament d'avui</button>
-                <button type="button" onClick={simulate} className="min-h-[44px] rounded-xl bg-slate-900 px-3 text-sm font-bold text-white">🚒 Simulació oposició</button>
+                <button type="button" onClick={adaptWeek} className="min-h-[44px] rounded-xl bg-white border border-purple-300 px-3 text-sm font-bold text-purple-700">📅 Adaptar setmana</button>
+                <button type="button" onClick={simulate} className="col-span-2 min-h-[44px] rounded-xl bg-slate-900 px-3 text-sm font-bold text-white">🚒 Simulació oposició completa</button>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <p className="text-xs font-bold tracking-widest text-slate-500">FORESTAL · OBJECTIUS ORIENTATIUS PER A 10</p>
-                <p className="mt-1 text-sm text-slate-600">Ruta completa: <b>3:10</b>. Repartiment proporcional a la càrrega dels trams; no és barem oficial.</p>
+                <p className="mt-1 text-sm text-slate-600">Ruta completa: <b>3:10</b>. Repartiment proporcional a la càrrega dels trams; <b>no és barem oficial</b>.</p>
                 <div className="mt-3 grid grid-cols-3 gap-2">{forestTargets.rows.map((r) => <div key={r.tram} className="rounded-xl bg-slate-50 p-3"><b>Tram {r.tram}</b><div className="text-lg">{formatTime(r.target)}</div><span className="text-xs text-slate-500">{r.actual ? `Tu: ${formatTime(r.actual)} · ${r.delta <= 0 ? '🟢' : '🟠'} ${r.delta > 0 ? '+' : ''}${Math.round(r.delta)} s` : 'pendent'}</span></div>)}</div>
             </div>
-            {roadmap !== null && <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5"><p className="text-xs font-bold tracking-widest text-amber-700">OBJECTIU</p><p className="mt-1 text-sm">Amb la tendència recent de <b>{LABELS[diagnosis.priority]}</b>, l'arribada a la referència de 10 és estimada en <b>{roadmap} setmanes</b>. És una projecció, no una garantia.</p></div>}
-            {savedPlan && <div className="rounded-3xl border border-green-200 bg-green-50 p-5"><p className="text-xs font-bold tracking-widest text-green-700">ENTRENAMENT D'AVUI GUARDAT</p><p className="mt-1 text-sm">{savedPlan.focusName} · {savedPlan.minutes} min · pots tornar-hi des d'aquesta pantalla.</p></div>}
+            {roadmap !== null && <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5"><p className="text-xs font-bold tracking-widest text-amber-700">PREDICCIÓ</p><p className="mt-1 text-sm">Amb la tendència recent de <b>{LABELS[diagnosis.priority]}</b>, l'arribada a la referència de 10 és estimada en <b>{roadmap} setmanes</b>. És una projecció, no una garantia.</p></div>}
+            {savedPlan && <div className="rounded-3xl border border-green-200 bg-green-50 p-5"><p className="text-xs font-bold tracking-widest text-green-700">ENTRENAMENT D'AVUI GUARDAT</p><p className="mt-1 text-sm">{savedPlan.focusName} · {savedPlan.minutes} min · objectiu adaptat a les teves dades.</p></div>}
+            {weeklyPlan && <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5"><p className="text-xs font-bold tracking-widest text-blue-700">SETMANA ADAPTADA</p><div className="mt-2 space-y-2">{weeklyPlan.days.map((d) => <div key={d.day} className="rounded-xl bg-white p-3"><b>{d.day} · {d.title}</b><p className="text-xs text-slate-600">{d.detail}</p></div>)}</div><p className="mt-3 text-xs text-slate-500">Guardada localment al dispositiu. Es recalcula després de noves sessions.</p></div>}
             {localAnswer && <div className="rounded-3xl border border-purple-200 bg-purple-50 p-5 shadow-sm"><p className="mb-2 text-xs font-bold tracking-widest text-purple-700">BOMBER COACH · RESULTAT</p><div className="whitespace-pre-wrap text-sm leading-6 text-slate-800">{localAnswer}</div></div>}
             <div className="space-y-3 rounded-3xl bg-white border border-slate-200 p-4 shadow-sm min-h-[240px]">
                 {isLoadingHistory && <p className="text-sm text-slate-400">Carregant converses…</p>}
