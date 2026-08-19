@@ -11,6 +11,7 @@ import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import TrainPage from './pages/TrainPage';
 import ProgressPage from './pages/ProgressPage';
+import ProfilePage from './pages/ProfilePage';
 import AiPage from './pages/AiPage';
 import SettingsPage from './pages/SettingsPage';
 import Register from './pages/Register';
@@ -30,12 +31,8 @@ const AuthenticatedApp = () => {
   }
 
   if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      navigateToLogin();
-      return null;
-    }
+    if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
+    if (authError.type === 'auth_required') { navigateToLogin(); return null; }
   }
 
   return (
@@ -49,6 +46,7 @@ const AuthenticatedApp = () => {
         <Route path="/" element={<HomePage />} />
         <Route path="/entrena/:type" element={<TrainPage />} />
         <Route path="/progres" element={<ProgressPage />} />
+        <Route path="/perfil" element={<ProfilePage />} />
         <Route path="/ia" element={<AiPage />} />
         <Route path="/configuracio" element={<SettingsPage />} />
       </Route>
