@@ -1,4 +1,5 @@
 const FIT_EPOCH_MS = Date.UTC(1989, 11, 31);
+const FIT_EPOCH_SECONDS = 631065600;
 
 const TYPE_FIELD_NAMES = {
     0: 'position_lat',
@@ -94,14 +95,15 @@ function parseFit(buffer) {
         if (compressed) {
             const timeOffset = recordHeader & 0x1f;
             const def = defs.get(localId);
-            if (!def) continue;
-            const obj = readDataMessage(view, offset, def, true);
+            if (!def) break;
+            const obj = readDataMessage(view, offset, def);
             offset = obj.offset;
             if (obj.record) { obj.record.timestampOffset = timeOffset; records.push(obj.record); }
             continue;
         }
         const isDefinition = (recordHeader & 0x40) !== 0;
         if (isDefinition) {
+            const hasDeveloperData = (recordHeader & 0x20) !== 0;
             offset += 1; // reserved
             const architecture = view.getUint8(offset++);
             const littleEndian = architecture === 0;
@@ -114,13 +116,16 @@ function parseFit(buffer) {
                 const baseType = view.getUint8(offset++);
                 fields.push({ fieldNum, size, baseType, name: fieldNum === 253 && globalMessage === 20 ? 'timestamp' : TYPE_FIELD_NAMES[fieldNum] });
             }
-            const devCount = view.getUint8(offset++);
-            offset += devCount * 3;
+            // The developer-field count only exists when bit 5 is set.
+            if (hasDeveloperData) {
+                const devCount = view.getUint8(offset++);
+                offset += devCount * 3;
+            }
             defs.set(localId, { globalMessage, fields, littleEndian });
         } else {
             const def = defs.get(localId);
             if (!def) break;
-            const obj = readDataMessage(view, offset, def, false);
+            const obj = readDataMessage(view, offset, def);
             offset = obj.offset;
             if (obj.record && (def.globalMessage === 20 || def.globalMessage === 18)) records.push(obj.record);
         }
@@ -146,30 +151,32 @@ export async function parseSuuntoFit(file) {
     const buffer = await file.arrayBuffer();
     const records = parseFit(buffer);
     const heartRates = records.map((r) => r.heart_rate).filter((v) => Number.isFinite(v) && v > 0 && v < 250);
-    const timestamps = records.map((r) => r.timestamp).filter((v) => Number.isFinite(v));
-    if (!heartRates.length) throw new Error('No he trobat freqüència cardíaca al FIT. Comprova que el Suunto hagi enregistrat la FC.');
-    const avg = heartRates.reduce((a, b) => a + b, 0) / heartRates.length;
-    const max = Math.max(...heartRates);
+    const timestamps = records.map((r) => r.timestamp).filter((v) => Number.isFinite(v) && v >= (FIT_EPOCH_MS + FIT_EPOCH_SECONDS * 1000));
+    const distances = records.map((r) => r.distance).filter((v) => Number.isFinite(v) && v >= 0);
     const start = timestamps.length ? Math.min(...timestamps) : null;
     const end = timestamps.length ? Math.max(...timestamps) : null;
     const durationSeconds = start && end ? Math.max(0, (end - start) / 1000) : 0;
+    const maxDistance = distances.length ? Math.max(...distances) : null;
+    const avg = heartRates.length ? heartRates.reduce((a, b) => a + b, 0) / heartRates.length : null;
+    const max = heartRates.length ? Math.max(...heartRates) : null;
     const zones = [
         { name: 'Z1', min: 0, max: 0.6 },
         { name: 'Z2', min: 0.6, max: 0.7 },
         { name: 'Z3', min: 0.7, max: 0.8 },
         { name: 'Z4', min: 0.8, max: 0.9 },
         { name: 'Z5', min: 0.9, max: 1.1 },
-    ]; 
+    ];
     return {
         source: 'suunto_fit',
         fileName: file.name,
         importedAt: new Date().toISOString(),
         date: start ? new Date(start).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
         durationSeconds,
-        heartRate: { average: Math.round(avg), max, samples: heartRates.length },
-        zonesByMaxHr: zones.map((zone) => ({
+        distanceKm: maxDistance !== null ? Math.round((maxDistance / 1000) * 100) / 100 : null,
+        heartRate: { average: avg !== null ? Math.round(avg) : null, max: max !== null ? Math.round(max) : null, samples: heartRates.length },
+        zonesByMaxHr: max ? zones.map((zone) => ({
             zone: zone.name,
             seconds: Math.round(heartRates.filter((hr) => (hr / max) >= zone.min && (hr / max) < zone.max).length * (durationSeconds / Math.max(1, heartRates.length))),
-        })),
+        })) : [],
     };
 }
