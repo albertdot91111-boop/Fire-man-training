@@ -11,7 +11,7 @@
   "background_color": "#07090d",
   "theme_color": "#07090d",
   "icons": [{
-    "src": "/bomber-icon-exact.svg?v=18",
+    "src": "/bomber-icon-original.svg?v=18",
     "sizes": "512x512",
     "type": "image/svg+xml",
     "purpose": "any maskable"
