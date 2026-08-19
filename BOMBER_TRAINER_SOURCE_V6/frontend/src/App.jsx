@@ -13,7 +13,6 @@ import TrainPage from './pages/TrainPage';
 import ProgressPage from './pages/ProgressPage';
 import AiPage from './pages/AiPage';
 import SettingsPage from './pages/SettingsPage';
-import DownloadPage from './pages/DownloadPage';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -46,7 +45,6 @@ const AuthenticatedApp = () => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
-      <Route path="/descarrega" element={<DownloadPage />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/entrena/:type" element={<TrainPage />} />
