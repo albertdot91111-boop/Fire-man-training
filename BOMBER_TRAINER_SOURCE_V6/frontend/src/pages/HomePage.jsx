@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
 import { MOTIVATION, TYPES, levelFor, nextLevel, streak, totalPoints, weakPoints } from '@/lib/btData';
+import { getTrainingRecommendation, recommendationPath } from '@/trainingRecommendation';
 
 const TODAY_ACTIONS = [
     { label: '🔥 ESPECÍFIC', to: '/entrena/estructural', type: 'estructural', detail: 'Incendi estructural · 16 kg + ninot 50 kg' },
@@ -68,7 +69,9 @@ export default function HomePage() {
     const level = levelFor(points);
     const next = nextLevel(points);
     const weak = useMemo(() => weakPoints(sessions), [sessions]);
+    const recommendation = useMemo(() => getTrainingRecommendation(sessions), [sessions]);
     const motivation = MOTIVATION[sessions.length % MOTIVATION.length];
+    const recommendationType = TYPES[recommendation.type] || TYPES.manteniment;
 
     return (
         <AppShell title="QUÈ PUC FER AVUI?">
@@ -102,6 +105,19 @@ export default function HomePage() {
                 <div className="flex items-end justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">RATXA</p><p className="text-4xl font-extrabold">{streak(sessions)} <span className="text-base font-semibold text-slate-400">dies</span></p></div><div className="text-right"><p className="text-xs font-bold tracking-widest text-slate-400">NIVELL</p><p className="text-xl font-extrabold">{level.name}</p><p className="text-sm text-slate-500">{points} punts</p></div></div>
                 {next && <div className="mt-4 h-2 w-full rounded-full bg-slate-100"><div className="h-2 rounded-full bg-slate-900" style={{ width: `${Math.min(100, Math.round((points / next.min) * 100))}%` }} /></div>}
                 <p className="mt-3 text-sm font-medium text-slate-600">{motivation}</p>
+            </section>
+
+            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm" aria-labelledby="recommendation-heading">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <p className="text-xs font-bold tracking-widest text-slate-400">PRIORITAT D'AVUI</p>
+                        <h2 id="recommendation-heading" className="mt-1 text-xl font-extrabold">{recommendation.label}</h2>
+                        <p className="mt-2 text-sm font-medium text-slate-600">{recommendation.reason}</p>
+                    </div>
+                    <span className="rounded-2xl px-3 py-2 text-xs font-extrabold" style={{ backgroundColor: recommendationType.soft, color: recommendationType.color }}>AUTOMÀTIC</span>
+                </div>
+                <Link to={recommendationPath(recommendation.type)} data-testid="link-smart-recommendation" className="mt-4 flex min-h-[52px] items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-extrabold text-white transition active:scale-[0.985]">Començar {recommendation.label.toLowerCase()}</Link>
+                <p className="mt-2 text-xs text-slate-400">La recomanació només utilitza el teu historial registrat; no inventa barems ni dades.</p>
             </section>
 
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm">
