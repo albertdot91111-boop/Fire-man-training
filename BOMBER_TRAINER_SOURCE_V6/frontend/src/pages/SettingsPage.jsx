@@ -28,14 +28,30 @@ export default function SettingsPage() {
     const [intervalsKey, setIntervalsKey] = useState(getIntervalsApiKey());
     const [intervalsType, setIntervalsType] = useState('auto');
     const [intervalsBusy, setIntervalsBusy] = useState(false);
-    const [intervalsConnected, setIntervalsConnected] = useState(false);
-    const [intervalsStatus, setIntervalsStatus] = useState('');
+    const [intervalsConnected, setIntervalsConnected] = useState(Boolean(getIntervalsApiKey()));
+    const [intervalsStatus, setIntervalsStatus] = useState(getIntervalsApiKey() ? 'Comprovant connexió…' : '');
     const navigate = useNavigate();
 
     useEffect(() => {
         pb.collection('bt_settings').getFullList().then((rows) => {
             if (rows[0]) { setSettingsId(rows[0].id); setMaterial(rows[0].material || []); }
         }).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        const key = getIntervalsApiKey();
+        if (!key) return undefined;
+        let cancelled = false;
+        testIntervalsConnection().then((account) => {
+            if (cancelled) return;
+            setIntervalsConnected(true);
+            setIntervalsStatus(`Connectat: ${account.name || 'compte Intervals.icu'}.`);
+        }).catch((error) => {
+            if (cancelled) return;
+            setIntervalsConnected(false);
+            setIntervalsStatus(error?.message || 'No s’ha pogut comprovar la connexió amb Intervals.icu.');
+        });
+        return () => { cancelled = true; };
     }, []);
 
     const toggle = async (name) => {
@@ -109,7 +125,7 @@ export default function SettingsPage() {
                 <h2 className="text-lg font-extrabold">⌚ Suunto</h2>
                 <p className="mt-1 text-sm text-slate-500">Importa un FIT exportat del teu Suunto i afegeix les dades disponibles a l’entrenament.</p>
                 <div className="mt-4 grid gap-3">
-                    <label className="grid gap-1 text-sm font-semibold">Prova a associar<select value={suuntoType} onChange={(e) => setSuuntoType(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3">{Object.values(TYPES).filter((t) => !['descans', 'manteniment', 'rapid'].includes(t.key)).map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></label>
+                    <label className="grid gap-1 text-sm font-semibold">Prova a associar<select value={suuntoType} onChange={(e) => setSuuntoType(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3">{Object.values(TYPES).filter((t) => !['descans', 'manteniment', 'rapid', 'pit'].includes(t.key)).map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></label>
                     <label className={`min-h-[56px] rounded-2xl bg-slate-900 px-4 flex items-center justify-center font-bold text-white cursor-pointer ${suuntoBusy ? 'opacity-60 pointer-events-none' : ''}`}>{suuntoBusy ? 'Llegint Suunto…' : '⌚ Importar activitat FIT'}<input type="file" accept=".fit,application/octet-stream" onChange={importSuunto} className="sr-only" disabled={suuntoBusy} /></label>
                 </div>
                 {suuntoMetrics && <div className="mt-4 grid grid-cols-2 gap-2 text-sm"><div className="rounded-xl bg-slate-50 p-3"><span className="text-slate-500">FC mitjana</span><strong className="block text-lg">{suuntoMetrics.heartRate.average ?? '—'}{suuntoMetrics.heartRate.average ? ' bpm' : ''}</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="text-slate-500">FC màxima</span><strong className="block text-lg">{suuntoMetrics.heartRate.max ?? '—'}{suuntoMetrics.heartRate.max ? ' bpm' : ''}</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="text-slate-500">Durada</span><strong className="block text-lg">{Math.round(suuntoMetrics.durationSeconds / 60)} min</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="text-slate-500">Distància</span><strong className="block text-lg">{suuntoMetrics.distanceKm ?? '—'}{suuntoMetrics.distanceKm !== null ? ' km' : ''}</strong></div></div>}
