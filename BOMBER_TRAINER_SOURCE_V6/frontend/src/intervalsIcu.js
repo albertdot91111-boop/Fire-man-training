@@ -78,7 +78,7 @@ export async function getRecentIntervalsActivities(days = 3650, onProgress) {
     onProgress?.(`Sincronitzant historial… bloc ${i + 1}/${chunks.length}`);
     const result = await fetchChunkResilient(chunks[i], onProgress, `bloc ${i + 1}/${chunks.length}`);
     for (const activity of Array.isArray(result.rows) ? result.rows : []) {
-      const key = String(activity?.id || `${activity?.start_date_local || ''}|${activity?.name || activity?.activity_name || ''}`);
+      const key = String(activity?.id || `${activity?.start_date_local || ''}|${activity?.name || activity?.activity_name || ''}|${activity?.type || activity?.activity_type || ''}`);
       if (!seen.has(key)) { seen.add(key); all.push(activity); }
     }
     failedRanges.push(...result.failedRanges);
@@ -100,10 +100,11 @@ function buildWearable(activity, existingWearable = {}) {
   const activityId = firstValue(activity?.id, existingWearable?.activityId);
   const activityType = firstValue(activity?.type, activity?.activity_type, activity?.sport_type, existingWearable?.activityType);
   const name = firstValue(activity?.name, activity?.activity_name, activity?.title, existingWearable?.name);
-  const startDateLocal = firstValue(activity?.start_date_local, activity?.startDateLocal, existingWearable?.startDateLocal);
-  const durationSeconds = numericValue(activity?.moving_time, activity?.movingTime, activity?.elapsed_time, activity?.elapsedTime, existingWearable?.durationSeconds);
+  const startDateLocal = firstValue(activity?.start_date_local, activity?.startDateLocal, activity?.start_date, existingWearable?.startDateLocal);
+  const durationSeconds = numericValue(activity?.moving_time, activity?.movingTime, activity?.elapsed_time, activity?.elapsedTime, activity?.duration, activity?.duration_seconds, existingWearable?.durationSeconds);
   const distanceMeters = numericValue(activity?.distance, activity?.distance_meters, activity?.distanceMeters, existingWearable?.distanceMeters);
-  const averageHeartRate = numericValue(activity?.average_heartrate, activity?.averageHeartRate, activity?.average_hr, existingWearable?.heartRate?.average);
+  const distanceKm = numericValue(activity?.distance_km, activity?.distanceKm, existingWearable?.distanceKm);
+  const averageHeartRate = numericValue(activity?.average_heartrate, activity?.averageHeartRate, activity?.average_hr, activity?.avg_hr, existingWearable?.heartRate?.average);
   const maxHeartRate = numericValue(activity?.max_heartrate, activity?.maxHeartRate, activity?.max_hr, existingWearable?.heartRate?.max);
   const minHeartRate = numericValue(activity?.min_heartrate, activity?.minHeartRate, activity?.min_hr, existingWearable?.heartRate?.min);
   const calories = numericValue(activity?.calories, existingWearable?.calories);
@@ -118,6 +119,7 @@ function buildWearable(activity, existingWearable = {}) {
     startDateLocal: startDateLocal || null,
     durationSeconds,
     distanceMeters,
+    distanceKm: distanceKm || null,
     heartRate: {
       ...(existingWearable?.heartRate || {}),
       average: averageHeartRate || null,
@@ -131,52 +133,60 @@ function buildWearable(activity, existingWearable = {}) {
   };
 }
 
+function activityMatchKey(activity) {
+  const id = String(activity?.id || '').trim();
+  if (id) return `id:${id}`;
+  const date = String(firstValue(activity?.start_date_local, activity?.startDateLocal, activity?.start_date) || '').slice(0, 16);
+  const name = String(firstValue(activity?.name, activity?.activity_name, activity?.title) || '').trim().toLowerCase();
+  const type = String(firstValue(activity?.type, activity?.activity_type, activity?.sport_type) || '').trim().toLowerCase();
+  return `fallback:${date}|${name}|${type}`;
+}
+
+function wearableMatchKey(wearable, date) {
+  const id = String(wearable?.activityId || '').trim();
+  if (id) return `id:${id}`;
+  const start = String(wearable?.startDateLocal || date || '').slice(0, 16);
+  const name = String(wearable?.name || '').trim().toLowerCase();
+  const type = String(wearable?.activityType || '').trim().toLowerCase();
+  return `fallback:${start}|${name}|${type}`;
+}
+
 export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, typeResolver, onProgress }) {
   const result = await getRecentIntervalsActivities(days, onProgress);
   const activities = result.activities || [];
   let imported = 0;
-  let updated = 0;
+  let existing = 0;
   let skipped = 0;
 
   const existingRows = await pb.collection('bt_sessions').getFullList({ sort: '-created', filter: `owner = "${owner}"` });
-  const byActivityId = new Map();
+  const knownKeys = new Set();
   for (const row of existingRows) {
     const rawWearable = row?.wearable;
     const wearable = typeof rawWearable === 'string' ? (() => { try { return JSON.parse(rawWearable); } catch (_) { return {}; } })() : (rawWearable || {});
-    const id = wearable?.source === 'intervals.icu' ? String(wearable?.activityId || '') : '';
-    if (id && !byActivityId.has(id)) byActivityId.set(id, row);
+    if (wearable?.source === 'intervals.icu') knownKeys.add(wearableMatchKey(wearable, row?.date));
   }
 
   for (const activity of activities) {
     try {
-      const date = String(firstValue(activity?.start_date_local, activity?.startDateLocal) || '').slice(0, 10);
+      const date = String(firstValue(activity?.start_date_local, activity?.startDateLocal, activity?.start_date) || '').slice(0, 10);
       if (!date) { skipped += 1; continue; }
-      const type = typeResolver?.(activity) || null;
-      const activityId = String(activity?.id || '');
-      const existing = activityId ? byActivityId.get(activityId) : null;
-      const rawExistingWearable = existing?.wearable;
-      const existingWearable = typeof rawExistingWearable === 'string' ? (() => { try { return JSON.parse(rawExistingWearable); } catch (_) { return {}; } })() : (rawExistingWearable || {});
-      const wearable = buildWearable(activity, existingWearable);
+      const key = activityMatchKey(activity);
+      if (knownKeys.has(key)) { existing += 1; continue; }
 
-      if (existing) {
-        const patch = { wearable, date };
-        if (wearable.durationSeconds > 0) patch.duration = Math.round((wearable.durationSeconds / 60) * 10) / 10;
-        await pb.collection('bt_sessions').update(existing.id, patch);
-        updated += 1;
-      } else {
-        const created = await pb.collection('bt_sessions').create({
-          type: type || 'manteniment',
-          date,
-          duration: wearable.durationSeconds > 0 ? Math.round((wearable.durationSeconds / 60) * 10) / 10 : 0,
-          points: 0,
-          notes: 'Activitat sincronitzada des d’Intervals.icu · pendent d’associar',
-          data: [],
-          wearable,
-          owner,
-        });
-        if (activityId) byActivityId.set(activityId, created);
-        imported += 1;
-      }
+      const type = typeResolver?.(activity) || null;
+      const wearable = buildWearable(activity);
+      await pb.collection('bt_sessions').create({
+        type: type || 'manteniment',
+        date,
+        duration: wearable.durationSeconds > 0 ? Math.round((wearable.durationSeconds / 60) * 10) / 10 : 0,
+        points: 0,
+        notes: 'Activitat sincronitzada des d’Intervals.icu · pendent d’associar',
+        data: [],
+        wearable,
+        owner,
+      });
+      knownKeys.add(key);
+      imported += 1;
     } catch (_) {
       skipped += 1;
     }
@@ -184,9 +194,24 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
 
   return {
     imported,
-    updated,
+    updated: 0,
+    existing,
     skipped,
     total: activities.length,
     failedRanges: result.failedRanges,
   };
+}
+
+export async function deleteAllIntervalsActivities({ pb, owner, onProgress }) {
+  const rows = await pb.collection('bt_sessions').getFullList({ filter: `owner = "${owner}"` });
+  const imported = rows.filter((row) => {
+    const raw = row?.wearable;
+    const wearable = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (_) { return {}; } })() : (raw || {});
+    return wearable?.source === 'intervals.icu';
+  });
+  for (let i = 0; i < imported.length; i += 1) {
+    onProgress?.(`Esborrant activitats sincronitzades… ${i + 1}/${imported.length}`);
+    await pb.collection('bt_sessions').delete(imported[i].id);
+  }
+  return imported.length;
 }
