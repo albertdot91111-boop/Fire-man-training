@@ -11,10 +11,16 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function request(action, params = {}) {
   const key = getIntervalsApiKey();
   if (!key) throw new Error('Falta la clau API personal d’Intervals.icu.');
-  const query = new URLSearchParams({ action, ...params });
+  // Never let the browser reuse a previous /api/intervals response. This is
+  // important for repeated history syncs: a cached 304 must not be interpreted
+  // as a failed Intervals response.
+  const query = new URLSearchParams({ action, ...params, _ts: String(Date.now()) });
   let lastError = null;
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const response = await fetch(`/api/intervals?${query.toString()}`, { headers: { 'x-intervals-api-key': key } });
+    const response = await fetch(`/api/intervals?${query.toString()}`, {
+      headers: { 'x-intervals-api-key': key, 'Cache-Control': 'no-cache' },
+      cache: 'no-store',
+    });
     const text = await response.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch (_) { data = { raw: text }; }
