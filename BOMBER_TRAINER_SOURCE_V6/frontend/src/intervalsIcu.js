@@ -23,17 +23,38 @@ export async function testIntervalsConnection() {
   return { id: data?.id, name: data?.name || data?.firstname || 'Compte connectat' };
 }
 
-export async function getRecentIntervalsActivities(days = 3650) {
+function dateChunks(days) {
   const end = new Date();
-  const start = new Date(Date.now() - days * 86400000);
-  const iso = (d) => d.toISOString().slice(0, 10);
-  return request('activities', { oldest: iso(start), newest: iso(end) });
+  const start = new Date(end.getTime() - days * 86400000);
+  const chunks = [];
+  let cursor = start;
+  while (cursor <= end) {
+    const chunkEnd = new Date(Math.min(cursor.getTime() + (180 - 1) * 86400000, end.getTime()));
+    chunks.push({ oldest: cursor.toISOString().slice(0, 10), newest: chunkEnd.toISOString().slice(0, 10) });
+    cursor = new Date(chunkEnd.getTime() + 86400000);
+  }
+  return chunks;
+}
+
+export async function getRecentIntervalsActivities(days = 3650, onProgress) {
+  const chunks = dateChunks(days);
+  const all = [];
+  const seen = new Set();
+  for (let i = 0; i < chunks.length; i += 1) {
+    onProgress?.(i + 1, chunks.length);
+    const rows = await request('activities', chunks[i]);
+    for (const activity of Array.isArray(rows) ? rows : []) {
+      const key = String(activity?.id || `${activity?.start_date_local || ''}|${activity?.name || ''}`);
+      if (!seen.has(key)) { seen.add(key); all.push(activity); }
+    }
+  }
+  return all;
 }
 
 export async function getActivityStreams(activityId) { return request('streams', { id: activityId }); }
 
-export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, typeResolver }) {
-  const activities = await getRecentIntervalsActivities(days);
+export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, typeResolver, onProgress }) {
+  const activities = await getRecentIntervalsActivities(days, onProgress);
   let imported = 0;
   for (const activity of activities || []) {
     const date = String(activity.start_date_local || '').slice(0, 10);
@@ -54,19 +75,9 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
       streamTypes: activity.stream_types || [], syncedAt: new Date().toISOString(),
     };
     if (existing[0]) {
-      // Important: do not overwrite a manual classification (forestal, aquatic, etc.).
       await pb.collection('bt_sessions').update(existing[0].id, { wearable, date });
     } else {
-      await pb.collection('bt_sessions').create({
-        type: type || 'manteniment',
-        date,
-        duration: Math.round((wearable.durationSeconds / 60) * 10) / 10,
-        points: 0,
-        notes: 'Activitat sincronitzada des d’Intervals.icu · pendent d’associar',
-        data: [],
-        wearable,
-        owner,
-      });
+      await pb.collection('bt_sessions').create({ type: type || 'manteniment', date, duration: Math.round((wearable.durationSeconds / 60) * 10) / 10, points: 0, notes: 'Activitat sincronitzada des d’Intervals.icu · pendent d’associar', data: [], wearable, owner });
     }
     imported += 1;
   }
