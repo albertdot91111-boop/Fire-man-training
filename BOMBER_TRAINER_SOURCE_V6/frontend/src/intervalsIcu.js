@@ -39,8 +39,11 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
     const date = String(activity.start_date_local || '').slice(0, 10);
     if (!date) continue;
     const type = typeResolver(activity);
-    if (!type) continue;
-    const existing = await pb.collection('bt_sessions').getFullList({ filter: `owner = \"${owner}\" && date = \"${date}\" && type = \"${type}\"`, sort: '-created' });
+    const activityId = String(activity.id || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const existing = activityId ? await pb.collection('bt_sessions').getFullList({
+      filter: `owner = "${owner}" && wearable.activityId = "${activityId}"`,
+      sort: '-created',
+    }) : [];
     const wearable = {
       source: 'intervals.icu', activityId: activity.id, activityType: activity.type,
       name: activity.name || null, startDateLocal: activity.start_date_local,
@@ -50,8 +53,21 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
       calories: Number(activity.calories || 0) || null, trainingLoad: Number(activity.icu_training_load || 0) || null,
       streamTypes: activity.stream_types || [], syncedAt: new Date().toISOString(),
     };
-    if (existing[0]) await pb.collection('bt_sessions').update(existing[0].id, { wearable });
-    else await pb.collection('bt_sessions').create({ type, date, duration: Math.round((wearable.durationSeconds / 60) * 10) / 10, points: 0, notes: 'Activitat sincronitzada des d’Intervals.icu', data: [], wearable, owner });
+    if (existing[0]) {
+      // Important: do not overwrite a manual classification (forestal, aquatic, etc.).
+      await pb.collection('bt_sessions').update(existing[0].id, { wearable, date });
+    } else {
+      await pb.collection('bt_sessions').create({
+        type: type || 'manteniment',
+        date,
+        duration: Math.round((wearable.durationSeconds / 60) * 10) / 10,
+        points: 0,
+        notes: 'Activitat sincronitzada des d’Intervals.icu · pendent d’associar',
+        data: [],
+        wearable,
+        owner,
+      });
+    }
     imported += 1;
   }
   return { imported, total: Array.isArray(activities) ? activities.length : 0 };
