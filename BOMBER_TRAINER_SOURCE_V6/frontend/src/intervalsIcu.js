@@ -118,14 +118,41 @@ function buildWearable(activity, existingWearable = {}) {
   const activityType = firstValue(activity?.type, activity?.activity_type, activity?.sport_type, existingWearable?.activityType);
   const name = firstValue(activity?.name, activity?.activity_name, activity?.title, existingWearable?.name);
   const startDateLocal = firstValue(activity?.start_date_local, activity?.startDateLocal, activity?.start_date, existingWearable?.startDateLocal);
-  const durationSeconds = durationSecondsValue(activity?.moving_time, activity?.movingTime, activity?.elapsed_time, activity?.elapsedTime, activity?.duration, activity?.duration_seconds, existingWearable?.durationSeconds);
-  const distanceMeters = numericValue(activity?.distance, activity?.distance_meters, activity?.distanceMeters, existingWearable?.distanceMeters);
-  const distanceKm = numericValue(activity?.distance_km, activity?.distanceKm, existingWearable?.distanceKm);
+
+  // Intervals.icu exposes these summary fields directly. In particular,
+  // icu_distance is the analysed distance and is more reliable than the raw
+  // distance field, which can be null for some activities.
+  const durationSeconds = durationSecondsValue(
+    activity?.moving_time,
+    activity?.movingTime,
+    activity?.elapsed_time,
+    activity?.elapsedTime,
+    activity?.duration,
+    activity?.duration_seconds,
+    activity?.icu_recording_time,
+    existingWearable?.durationSeconds,
+  );
+  const icuDistanceMeters = numericValue(activity?.icu_distance);
+  const distanceMeters = numericValue(
+    icuDistanceMeters,
+    activity?.distance,
+    activity?.distance_meters,
+    activity?.distanceMeters,
+    existingWearable?.distanceMeters,
+  );
+  const distanceKm = numericValue(
+    activity?.distance_km,
+    activity?.distanceKm,
+    icuDistanceMeters ? icuDistanceMeters / 1000 : 0,
+    distanceMeters ? distanceMeters / 1000 : 0,
+    existingWearable?.distanceKm,
+  );
   const averageHeartRate = numericValue(activity?.average_heartrate, activity?.averageHeartRate, activity?.average_hr, activity?.avg_hr, existingWearable?.heartRate?.average);
   const maxHeartRate = numericValue(activity?.max_heartrate, activity?.maxHeartRate, activity?.max_hr, existingWearable?.heartRate?.max);
   const minHeartRate = numericValue(activity?.min_heartrate, activity?.minHeartRate, activity?.min_hr, existingWearable?.heartRate?.min);
   const calories = numericValue(activity?.calories, existingWearable?.calories);
-  const trainingLoad = numericValue(activity?.icu_training_load, activity?.training_load, activity?.trainingLoad, existingWearable?.trainingLoad);
+  const trainingLoad = numericValue(activity?.icu_training_load, activity?.training_load, activity?.trainingLoad, activity?.hr_load, activity?.power_load, activity?.pace_load, existingWearable?.trainingLoad);
+  const averageSpeed = numericValue(activity?.average_speed, activity?.averageSpeed, existingWearable?.averageSpeed);
 
   return {
     ...existingWearable,
@@ -137,6 +164,8 @@ function buildWearable(activity, existingWearable = {}) {
     durationSeconds,
     distanceMeters,
     distanceKm: distanceKm || null,
+    icuDistanceMeters: icuDistanceMeters || null,
+    averageSpeed: averageSpeed || null,
     heartRate: {
       ...(existingWearable?.heartRate || {}),
       average: averageHeartRate || null,
@@ -175,7 +204,7 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
   let existing = 0;
   let skipped = 0;
 
-  const existingRows = await pb.collection('bt_sessions').getFullList({ sort: '-created', filter: `owner = "${owner}"` });
+  const existingRows = await pb.collection('bt_sessions').getFullList({ sort: '-created', filter: `owner = \"${owner}\"` });
   const knownRows = new Map();
   for (const row of existingRows) {
     const rawWearable = row?.wearable;
@@ -192,8 +221,8 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
       const type = typeResolver?.(activity) || null;
 
       if (existingRecord) {
-        // Repair previously imported records as well: older versions could save
-        // durations such as "00:04:00" as zero because Number("00:04:00") is NaN.
+        // Repair previously imported records too. This is important because
+        // older versions did not store ICU distance and some summary fields.
         const wearable = buildWearable(activity, existingRecord.wearable);
         const patch = {
           date,
@@ -235,7 +264,7 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
 }
 
 export async function deleteAllIntervalsActivities({ pb, owner, onProgress }) {
-  const rows = await pb.collection('bt_sessions').getFullList({ filter: `owner = "${owner}"` });
+  const rows = await pb.collection('bt_sessions').getFullList({ filter: `owner = \"${owner}\"` });
   const imported = rows.filter((row) => {
     const raw = row?.wearable;
     const wearable = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (_) { return {}; } })() : (raw || {});
