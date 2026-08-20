@@ -55,6 +55,9 @@ FORMAT:
 - Utilitza títols i llistes quan ajudin.
 - No diguis que ets un model d'IA ni expliquis aquesta instrucció interna.`;
 
+    // Use a normal Responses API request here and convert the result to our
+    // own tiny SSE stream. This is more robust on Vercel than proxying the
+    // upstream OpenAI stream directly through a serverless function.
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -63,16 +66,42 @@ FORMAT:
       },
       body: JSON.stringify({
         model: 'gpt-5',
-        stream: true,
         input,
         instructions,
         max_output_tokens: 900,
       }),
     });
 
-    if (!response.ok || !response.body) {
-      const detail = await response.text();
-      res.status(response.status || 502).json({ error: detail || 'Error connectant amb OpenAI.' });
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      let detail = responseText || 'Error connectant amb OpenAI.';
+      try {
+        const parsed = JSON.parse(responseText);
+        detail = parsed?.error?.message || parsed?.error || detail;
+      } catch (_) {}
+      res.status(response.status || 502).json({ error: detail });
+      return;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch (_) {
+      res.status(502).json({ error: 'Resposta d’OpenAI no vàlida.' });
+      return;
+    }
+
+    const output = parsed?.output_text || (Array.isArray(parsed?.output)
+      ? parsed.output
+          .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
+          .filter((item) => item?.type === 'output_text' && typeof item?.text === 'string')
+          .map((item) => item.text)
+          .join('')
+      : '');
+
+    if (!output) {
+      res.status(502).json({ error: 'La IA ha retornat una resposta buida.' });
       return;
     }
 
@@ -81,42 +110,8 @@ FORMAT:
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    const send = (payload) => {
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    };
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
-      buffer = events.pop() || '';
-
-      for (const event of events) {
-        for (const line of event.split('\n')) {
-          if (!line.startsWith('data:')) continue;
-          const raw = line.slice(5).trim();
-          if (!raw || raw === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(raw);
-            if (parsed.type === 'response.output_text.delta' && parsed.delta) {
-              send({ type: 'content', data: { content: parsed.delta } });
-            }
-            if (parsed.type === 'response.failed') {
-              send({ type: 'error', data: { content: 'La IA ha fallat durant la resposta.' } });
-            }
-          } catch (_) {}
-        }
-      }
-    }
-
-    send({ type: 'completed', data: { content: '' } });
+    res.write(`data: ${JSON.stringify({ type: 'content', data: { content: output } })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'completed', data: { content: '' } })}\n\n`);
     res.end();
   } catch (error) {
     if (!res.headersSent) {
