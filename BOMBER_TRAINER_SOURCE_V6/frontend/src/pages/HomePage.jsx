@@ -61,11 +61,6 @@ export default function HomePage() {
         <AppShell title="QUÈ PUC FER AVUI?">
             <Helmet><title>Què puc fer avui? — BOMBER TRAINER</title><meta name="description" content="Entrenaments diaris per a opositors de Bombers." /></Helmet>
 
-            <section className="rounded-3xl bg-slate-900 p-5 text-white shadow-sm" aria-labelledby="daily-plan-heading">
-                <div><p className="text-xs font-bold tracking-[0.18em] text-slate-300">ENTRENAMENT D'AVUI</p><h2 id="daily-plan-heading" className="mt-1 text-2xl font-extrabold tracking-tight">La sessió te la proposa l'app</h2><p className="mt-2 text-sm text-slate-300">Es calcula automàticament segons el que fa més temps que no treballes.</p></div>
-                {planItems.length > 0 ? <div className="mt-4 space-y-2">{planItems.map((item, i) => <Link key={`${item.type}-${i}`} to={item.to} className="block rounded-2xl bg-white/10 p-4 hover:bg-white/15"><div className="flex items-center justify-between gap-3"><span className="font-extrabold">{i + 1}. {item.title}</span><span className="text-xs font-bold text-slate-300">FER →</span></div><p className="mt-1 text-sm text-slate-300">{item.detail}</p></Link>)}</div> : <div className="mt-4 rounded-2xl bg-white/10 p-4 text-sm text-slate-300">Encara no hi ha prou dades per personalitzar la sessió.</div>}
-            </section>
-
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm" aria-labelledby="physical-progress-heading">
                 <div className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold tracking-[0.18em] text-slate-400">PROGRÉS FÍSIC</p><h2 id="physical-progress-heading" className="mt-1 text-2xl font-extrabold tracking-tight">Preparació actual</h2></div><span className="text-sm font-bold text-slate-500">0% = sense registre · 100% = nivell 10</span></div>
                 <div className="mt-4 space-y-4">
