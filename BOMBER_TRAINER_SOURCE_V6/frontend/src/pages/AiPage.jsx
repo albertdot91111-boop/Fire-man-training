@@ -4,7 +4,7 @@ import AppShell from '@/components/AppShell';
 import pb from '@/lib/pocketbaseClient';
 import { diagnoseBomberProgress } from '@/aiEngine';
 
-const QUICK = ['Com vaig?', 'Què haig de millorar?', 'Què faig avui?', 'Quins punts febles tinc?'];
+const QUICK = ['Com vaig?', 'Què haig de millorar?', 'Què faig avui?', 'Quins punts febles tinc?', 'Com evoluciono?', 'Quina prova prioritzo?'];
 const LABELS = { forestal: 'Forestal', estructural: 'Estructural', aquatic: 'Aquàtica', pit: 'Banca', cames: 'Cames' };
 
 function makeContext(data) {
@@ -35,10 +35,14 @@ function localCoachAnswer(question, data) {
     const focus = diagnosis.priority ? LABELS[diagnosis.priority] || diagnosis.priority : 'Forestal';
     return `### Entrenament d'avui\n\n**Focus:** ${focus}\n\n1. Escalfament 8–10 min.\n2. Treball específic de la prioritat, sense buscar màxim si vens carregat.\n3. Registra temps, repeticions i penalitzacions.\n4. Recuperació i mobilitat.\n\nEl proper entrenament s'ha d'adaptar al resultat d'avui.`;
   }
-  if (q.includes('últim') || q.includes('ultim') || q.includes('evolució') || q.includes('evolucio')) {
-    return `### Evolució recent\n\n${latest.map(s => `• ${s.date || 'sense data'} — ${LABELS[s.type] || s.type} — ${s.duration ? `${s.duration} min` : ''}${s.penalties ? ` · ${s.penalties} penalitzacions` : ''}`).join('\n')}\n\nSi em preguntes per una prova concreta, puc centrar l'anàlisi en aquella prova.`;
+  if (q.includes('evolucion') || q.includes('evolució')) {
+    return `### Evolució recent\n\n${latest.map(s => `• ${s.date || 'sense data'} — ${LABELS[s.type] || s.type} — ${s.duration ? `${s.duration} min` : ''}${s.penalties ? ` · ${s.penalties} penalitzacions` : ''}`).join('\n')}\n\nLa tendència s'ha de valorar amb diverses sessions, no amb una sola marca.`;
   }
-  return `### Anàlisi local\n\nHe revisat les dades disponibles de Bomber Trainer. Ara mateix la prioritat detectada és **${diagnosis.priority ? LABELS[diagnosis.priority] || diagnosis.priority : 'pendent de més dades'}**.\n\nPuc analitzar progrés, punts febles, evolució recent i entrenament recomanat sense utilitzar cap API.\n\nPer a una pregunta molt específica i oberta, pots utilitzar **Pregunta a Gemini**.`;
+  if (q.includes('prioritzo') || q.includes('prioritzar') || q.includes('prioritat')) {
+    const focus = diagnosis.priority ? LABELS[diagnosis.priority] || diagnosis.priority : 'pendent de més dades';
+    return `### Prova a prioritzar\n\n**${focus}**\n\nÉs la prioritat que surt de les dades actuals. Si vols, després pots preguntar a Gemini per una estratègia més específica.`;
+  }
+  return `### Anàlisi local\n\nHe revisat les dades disponibles de Bomber Trainer. Ara mateix la prioritat detectada és **${diagnosis.priority ? LABELS[diagnosis.priority] || diagnosis.priority : 'pendent de més dades'}**.\n\nPuc analitzar progrés, punts febles, evolució recent, prioritat i entrenament recomanat sense utilitzar cap API.\n\nPer a una pregunta molt específica i oberta, pots utilitzar **Pregunta a Gemini**.`;
 }
 
 export default function AiPage() {
@@ -104,21 +108,13 @@ export default function AiPage() {
     </div>
 
     <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5">
-      <button onClick={() => switchMode('local')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode==='local' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>
-        🟢 Local
-        <span className="block text-[11px] font-medium opacity-70">Gratis · il·limitat</span>
-      </button>
-      <button onClick={() => switchMode('gemini')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode==='gemini' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>
-        🤖 Gemini
-        <span className="block text-[11px] font-medium opacity-70">Preguntes específiques</span>
-      </button>
+      <button onClick={() => switchMode('local')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode==='local' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>🟢 Local<span className="block text-[11px] font-medium opacity-70">Gratis · il·limitat</span></button>
+      <button onClick={() => switchMode('gemini')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode==='gemini' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>🤖 Gemini<span className="block text-[11px] font-medium opacity-70">Preguntes específiques</span></button>
     </div>
 
     {mode === 'local' ? <div className="grid grid-cols-2 gap-2">
       {QUICK.map(q => <button key={q} onClick={() => ask(q, 'local')} disabled={loading} className="min-h-[52px] rounded-xl bg-white border border-slate-200 px-3 text-sm font-semibold shadow-sm">{q}</button>)}
-    </div> : <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm text-slate-700">
-      <b>🤖 Gemini</b><br/>Pregunta el que vulguis sobre les teves dades, entrenament o preparació. Gemini rebrà el resum de les dades del Bomber Trainer.
-    </div>}
+    </div> : <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm text-slate-700"><b>🤖 Gemini</b><br/>Pregunta el que vulguis sobre les teves dades, entrenament o preparació. Gemini rebrà el resum de les dades del Bomber Trainer.</div>}
 
     <div className="space-y-3 rounded-3xl bg-white border border-slate-200 p-4 shadow-sm min-h-[300px]">
       {messages.length === 0 && <div className="rounded-2xl bg-purple-50 p-4 text-sm text-slate-700"><b>Hola! 👋</b><br/><br/>{mode === 'local' ? 'Soc el Coach local. Tinc les teves dades i puc analitzar-les sense API i sense límit.' : 'Soc Gemini. Fes-me una pregunta específica i analitzaré les dades que tinc del Bomber Trainer.'}</div>}
