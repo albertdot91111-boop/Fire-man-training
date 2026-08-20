@@ -2,26 +2,50 @@ function basicAuth(apiKey) {
   return `Basic ${Buffer.from(`API_KEY:${apiKey}`).toString('base64')}`;
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function fetchIntervals(path, apiKey) {
-  const response = await fetch(`https://intervals.icu${path}`, {
-    headers: { Authorization: basicAuth(apiKey), Accept: 'application/json' },
-  });
-  const text = await response.text();
-  let body;
-  try { body = text ? JSON.parse(text) : null; } catch (_) { body = { raw: text }; }
-  if (!response.ok) {
-    const detail = body?.error || body?.message || body?.raw || `Intervals.icu ha retornat ${response.status}.`;
-    const error = new Error(String(detail));
-    error.status = response.status;
-    throw error;
+  let lastResponse = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const separator = path.includes('?') ? '&' : '?';
+    const freshPath = `${path}${separator}_bt=${Date.now()}_${attempt}`;
+    const response = await fetch(`https://intervals.icu${freshPath}`, {
+      headers: {
+        Authorization: basicAuth(apiKey),
+        Accept: 'application/json',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+      cache: 'no-store',
+    });
+    lastResponse = response;
+    const text = await response.text();
+    let body;
+    try { body = text ? JSON.parse(text) : null; } catch (_) { body = { raw: text }; }
+
+    // Intervals.icu can occasionally answer a history request with 304 even
+    // though this request is not conditional. Never pass that status through
+    // to the browser because it has no usable response body.
+    if (response.status === 304) {
+      await sleep(1500 * (attempt + 1));
+      continue;
+    }
+
+    if (!response.ok) {
+      const detail = body?.error || body?.message || body?.raw || `Intervals.icu ha retornat ${response.status}.`;
+      const error = new Error(String(detail));
+      error.status = response.status;
+      throw error;
+    }
+    return body;
   }
-  return body;
+
+  const error = new Error(`Intervals.icu ha retornat 304 repetidament per a aquesta consulta.`);
+  error.status = 502;
+  throw error;
 }
 
 export default async function handler(req, res) {
-  // Activity history is user-specific and must always be fetched fresh.
-  // Prevent Vercel/browser conditional caching from turning a repeated sync
-  // request into a 304 with an empty body.
   res.setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
   res.setHeader('Vary', 'x-intervals-api-key');
 
@@ -54,6 +78,7 @@ export default async function handler(req, res) {
 
     return res.status(400).json({ error: 'Acció d’Intervals.icu no reconeguda.' });
   } catch (error) {
-    return res.status(Number(error?.status) >= 400 && Number(error?.status) < 600 ? Number(error.status) : 502).json({ error: error?.message || 'No s’ha pogut contactar amb Intervals.icu.' });
+    const status = Number(error?.status);
+    return res.status(status >= 400 && status < 600 && status !== 304 ? status : 502).json({ error: error?.message || 'No s’ha pogut contactar amb Intervals.icu.' });
   }
 }
