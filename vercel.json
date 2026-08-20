@@ -3,6 +3,6 @@
   "buildCommand": "cd BOMBER_TRAINER_SOURCE_V6/frontend && yarn build",
   "outputDirectory": "BOMBER_TRAINER_SOURCE_V6/frontend/dist",
   "rewrites": [
-    { "source": "/((?!.*\\.[^/]+$).*)", "destination": "/index.html" }
+    { "source": "/((?!api(?:/|$)|.*\\.[^/]+$).*)", "destination": "/index.html" }
   ]
 }
