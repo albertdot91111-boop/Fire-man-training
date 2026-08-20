@@ -15,30 +15,21 @@ const TODAY_ACTIONS = [
     { label: '⏸️ AVUI NO PUC ENTRENAR', to: '/entrena/descans', type: 'descans', detail: 'Registra el dia' },
 ];
 
-const DAILY_OPTIONS = [
-    { type: 'pressbanca', title: 'Press banca', detail: 'Força específica · treballa tècnica, càrrega i repeticions segons el teu nivell.', to: '/entrena/pressbanca' },
-    { type: 'estructural', title: 'Específic estructural', detail: 'Treball específic de força i resistència per a la prova.', to: '/entrena/estructural' },
-    { type: 'forestal', title: 'Circuit forestal', detail: 'Circuit específic amb control del temps i dels trams.', to: '/entrena/forestal' },
-    { type: 'aquatic', title: 'Aquàtica', detail: 'Apnea, salvament i remolc segons la sessió disponible.', to: '/entrena/aquatic' },
-    { type: 'manteniment', title: 'Manteniment', detail: 'Sessió flexible sense material obligatori.', to: '/entrena/manteniment' },
-];
-
-function daysSince(date) {
-    if (!date) return 999;
-    const d = new Date(date); const now = new Date();
-    return Math.max(0, Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000));
-}
-
-function buildDailyPlan(sessions) {
-    const lastByType = {};
-    sessions.forEach((s) => { if (!lastByType[s.type]) lastByType[s.type] = s; });
-    return [...DAILY_OPTIONS].sort((a, b) => daysSince(lastByType[b.type]?.date) - daysSince(lastByType[a.type]?.date)).slice(0, 3);
-}
-
 function formatSeconds(seconds) {
     if (!Number.isFinite(seconds) || seconds <= 0) return '—';
     const m = Math.floor(seconds / 60); const s = Math.round(seconds % 60);
     return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function benchProgress(sessions) {
+    const entries = sessions.flatMap((s) => Array.isArray(s.data) ? s.data : [])
+        .filter((e) => String(e.exercici || '').toLowerCase().includes('press banca'));
+    const values = entries.map((e) => ({ weight: Number(e.pes) || 0, reps: Number(e.repeticions) || Number(e.reps) || 0 })).filter((e) => e.weight > 0);
+    if (!values.length) return null;
+    const best = values.reduce((a, b) => (b.weight > a.weight ? b : a), values[0]);
+    const weightPct = (best.weight / 65) * 100;
+    const repPct = best.reps ? (best.reps / 20) * 100 : weightPct;
+    return Math.round(Math.max(0, Math.min(100, Math.min(weightPct, repPct))));
 }
 
 export default function HomePage() {
@@ -50,32 +41,53 @@ export default function HomePage() {
         pb.collection('bt_sessions').getFullList({ sort: '-date', filter: `owner = \"${owner}\"` }).then(setSessions).catch(() => setSessions([]));
     }, []);
 
-    const planItems = useMemo(() => buildDailyPlan(sessions), [sessions]);
     const diagnosis = useMemo(() => diagnoseBomberProgress(sessions), [sessions]);
     const points = totalPoints(sessions);
     const level = levelFor(points);
     const weak = useMemo(() => weakPoints(sessions), [sessions]);
     const motivation = MOTIVATION[sessions.length % MOTIVATION.length];
+    const progressByType = useMemo(() => {
+        const map = {};
+        diagnosis.tests.forEach((test) => { map[test.type] = test.readiness?.progress ?? null; });
+        map.pressbanca = benchProgress(sessions);
+        return map;
+    }, [diagnosis, sessions]);
+
+    const actionDetail = (action) => {
+        const pct = progressByType[action.type];
+        if (pct !== null && pct !== undefined) return `${action.detail} · Progrés ${pct}%`;
+        return action.detail;
+    };
 
     return (
-        <AppShell title="QUÈ PUC FER AVUI?">
-            <Helmet><title>Què puc fer avui? — BOMBER TRAINER</title><meta name="description" content="Entrenaments diaris per a opositors de Bombers." /></Helmet>
+        <AppShell title="INICI">
+            <Helmet><title>Inici — BOMBER TRAINER</title><meta name="description" content="Entrenaments i progrés diari per a opositors de Bombers." /></Helmet>
 
-            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm" aria-labelledby="physical-progress-heading">
-                <div className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold tracking-[0.18em] text-slate-400">PROGRÉS FÍSIC</p><h2 id="physical-progress-heading" className="mt-1 text-2xl font-extrabold tracking-tight">Preparació actual</h2></div><span className="text-sm font-bold text-slate-500">0% = sense registre · 100% = nivell 10</span></div>
-                <div className="mt-4 space-y-4">
-                    {diagnosis.tests.map((test) => {
-                        const pct = test.readiness?.progress ?? 0;
-                        const time = formatSeconds(test.latestTimeSeconds);
-                        return <div key={test.type}><div className="mb-1 flex items-center justify-between gap-3"><span className="font-bold">{test.label}</span><span className="font-extrabold">{test.readiness ? `${pct}%` : '—'}</span></div><div className="h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-3 rounded-full bg-slate-900 transition-all" style={{ width: `${pct}%` }} /></div><p className="mt-1 text-xs text-slate-500">{time === '—' ? 'Sense registre' : `Últim temps: ${time}`} {test.readiness?.target ? `· referència orientativa: ${formatSeconds(test.readiness.target)}` : '· sense barem numèric configurat'}</p></div>;
-                    })}
-                </div>
-                <p className="mt-4 text-xs text-slate-500">El percentatge és una orientació del projecte, no un barem oficial. La navette no es calcula ni es mostra fins que hi hagi confirmació oficial.</p>
+            <section className="grid grid-cols-3 gap-3" aria-label="Resum de progrés">
+                {[
+                    ['PUNTS', points],
+                    ['RATXA', `${streak(sessions)} d`],
+                    ['NIVELL', level.name],
+                ].map(([label, value]) => <div key={label} className="rounded-3xl bg-white border border-slate-200 p-4 text-center shadow-sm"><p className="text-xs font-bold tracking-widest text-slate-400">{label}</p><p className="mt-1 text-lg font-extrabold">{value}</p></div>)}
             </section>
 
-            <section aria-labelledby="today-actions-heading"><div className="mb-3 flex items-end justify-between gap-4"><div><p className="text-xs font-bold tracking-[0.18em] text-slate-400">PUNT DE PARTIDA</p><h2 id="today-actions-heading" className="mt-1 text-xl font-extrabold tracking-tight">Tria una acció per començar</h2></div><span className="hidden shrink-0 text-xs font-bold text-slate-400 sm:block">AVUI</span></div><div className="grid gap-3 sm:grid-cols-2">{TODAY_ACTIONS.map(({ label, to, type, detail }) => { const t = TYPES[type]; return <Link key={to} to={to} aria-label={label} data-testid={`link-today-action-${type}`} className="group flex min-h-[92px] flex-col justify-between rounded-3xl border border-black/5 p-5 text-left shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}><p className="text-lg font-extrabold leading-tight tracking-tight">{label}</p><p className="mt-3 text-xs font-semibold" style={{ color: t.color }}>{detail}</p></Link>; })}</div></section>
+            <section aria-labelledby="today-actions-heading">
+                <div className="mb-3"><p className="text-xs font-bold tracking-[0.18em] text-slate-400">PUNT DE PARTIDA</p><h2 id="today-actions-heading" className="mt-1 text-xl font-extrabold tracking-tight">Tria una acció per començar</h2></div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    {TODAY_ACTIONS.map(({ label, to, type, detail }) => {
+                        const t = TYPES[type];
+                        const pct = progressByType[type];
+                        const showProgress = ['estructural', 'forestal', 'aquatic', 'pressbanca'].includes(type);
+                        return <Link key={to} to={to} aria-label={label} data-testid={`link-today-action-${type}`} className="group flex min-h-[112px] flex-col justify-between rounded-3xl border border-black/5 p-5 text-left shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}>
+                            <div className="flex items-start justify-between gap-3"><p className="text-lg font-extrabold leading-tight tracking-tight">{label}</p>{showProgress && <span className="shrink-0 rounded-full bg-white/80 px-3 py-1 text-sm font-extrabold" style={{ color: t.color }}>{pct === null || pct === undefined ? '—' : `${pct}%`}</span>}</div>
+                            <p className="mt-3 text-xs font-semibold" style={{ color: t.color }}>{detail}</p>
+                            {showProgress && pct !== null && pct !== undefined && <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/70"><div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: t.color }} /></div>}
+                        </Link>;
+                    })}
+                </div>
+            </section>
 
-            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><div className="flex items-end justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">RATXA</p><p className="text-4xl font-extrabold">{streak(sessions)} <span className="text-base font-semibold text-slate-400">dies</span></p></div><div className="text-right"><p className="text-xs font-bold tracking-widest text-slate-400">NIVELL</p><p className="text-xl font-extrabold">{level.name}</p><p className="text-sm text-slate-500">{points} punts</p></div></div><p className="mt-3 text-sm font-medium text-slate-600">{motivation}</p></section>
+            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><div className="flex items-end justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">RESUM</p><p className="text-xl font-extrabold">La teva preparació</p></div><div className="text-right"><p className="text-xs font-bold tracking-widest text-slate-400">SESSIONS</p><p className="text-xl font-extrabold">{sessions.length}</p></div></div><p className="mt-3 text-sm font-medium text-slate-600">{motivation}</p></section>
 
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Punts febles detectats</h2>{weak.length === 0 ? <p className="mt-2 text-sm text-slate-500">Tot treballat aquesta setmana. Continua acumulant feina útil.</p> : <ul className="mt-3 space-y-2">{weak.map((w) => <li key={w.type} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3"><span className="font-semibold">{TYPES[w.type].label}</span><span className="text-sm text-slate-500">{w.days === null ? 'mai registrat' : `fa ${w.days} dies`}</span></li>)}</ul>}</section>
         </AppShell>
