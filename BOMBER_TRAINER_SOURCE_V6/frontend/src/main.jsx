@@ -3,8 +3,8 @@ import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
 import '@/index.css'
 
-// Bomber Trainer only needs #root in document.body. Remove any third-party
-// floating overlays injected outside the app (for example video/ad widgets).
+// Bomber Trainer only needs the React app inside #root.
+// Remove floating third-party/old widgets that may be injected outside the app.
 function removeExternalOverlays() {
   const clean = () => {
     document.body?.childNodes.forEach((node) => {
@@ -12,10 +12,17 @@ function removeExternalOverlays() {
         node.remove()
       }
     })
+
+    // Also remove common floating embed/widget elements if an old script
+    // manages to place them back inside the document.
+    document.querySelectorAll('iframe, object, embed').forEach((node) => {
+      if (!node.closest('#root')) node.remove()
+    })
   }
+
   clean()
   const observer = new MutationObserver(clean)
-  observer.observe(document.body, { childList: true })
+  observer.observe(document.documentElement, { childList: true, subtree: true })
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -28,8 +35,15 @@ if (document.readyState === 'loading') {
   removeExternalOverlays()
 }
 
+// Remove stale service workers from older builds so an obsolete overlay/button
+// cannot be restored from a previous application version.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {})
+  window.addEventListener('load', async () => {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(registrations.map((registration) => registration.unregister()))
+      const cacheKeys = await caches.keys()
+      await Promise.all(cacheKeys.map((key) => caches.delete(key)))
+    } catch (_) {}
   })
 }
