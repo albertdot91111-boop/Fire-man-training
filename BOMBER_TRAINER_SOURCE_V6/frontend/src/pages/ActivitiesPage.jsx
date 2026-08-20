@@ -19,6 +19,8 @@ const labels = {
   strength: 'Força', weighttraining: 'Força', cycling: 'Bici',
 };
 
+const RUNNING_TYPES = new Set(['running', 'run']);
+
 function metricNumber(v) { return Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null; }
 function formatDuration(seconds) { const n = metricNumber(seconds); if (!n) return '—'; const m = Math.floor(n / 60); const s = Math.round(n % 60); return `${m}:${String(s).padStart(2, '0')}`; }
 function formatPace(seconds, meters) {
@@ -29,6 +31,7 @@ function formatPace(seconds, meters) {
   const whole = Math.round(secPerKm); return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')} /km`;
 }
 function activityLabel(wearable) { return labels[String(wearable?.activityType || '').toLowerCase()] || wearable?.activityType || wearable?.name || 'Activitat'; }
+function isRunningActivity(session) { return RUNNING_TYPES.has(String(session?.wearable?.activityType || '').toLowerCase()); }
 
 export default function ActivitiesPage() {
   const [sessions, setSessions] = useState([]);
@@ -50,6 +53,7 @@ export default function ActivitiesPage() {
   const visible = useMemo(() => {
     if (filter === 'all') return sessions;
     if (filter === 'pending') return sessions.filter(s => !s.type || s.type === 'manteniment');
+    if (filter === 'running') return sessions.filter(isRunningActivity);
     return sessions.filter(s => s.type === filter);
   }, [sessions, filter]);
 
@@ -72,8 +76,8 @@ export default function ActivitiesPage() {
           <div><p className="text-xs font-bold tracking-widest text-slate-400">SUUNTO · INTERVALS.ICU</p><h2 className="mt-1 text-xl font-extrabold">Activitats sincronitzades</h2><p className="mt-2 text-sm text-slate-500">Aquí decideixes quines sessions són proves reals de preparació i quines són només entrenament.</p></div>
           <Link to="/configuracio" className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold">⚙️ Configuració</Link>
         </div>
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-          {[['all','Totes'],['pending','Pendents / normals'],['forestal','Forestals'],['estructural','Estructurals'],['aquatic','Aquàtiques'],['pressbanca','Press banca'],['cames','Cames']].map(([key,label]) => <button key={key} onClick={() => setFilter(key)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${filter === key ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>{label}</button>)}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {[['all','Totes'],['pending','Pendents / normals'],['running','Curses'],['forestal','Forestals'],['estructural','Estructurals'],['aquatic','Aquàtiques'],['pressbanca','Press banca'],['cames','Cames']].map(([key,label]) => <button key={key} onClick={() => setFilter(key)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${filter === key ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>{label}</button>)}
         </div>
       </section>
 
