@@ -4,7 +4,7 @@ import { Home, LineChart, Bot, UserRound } from 'lucide-react';
 import pb from '@/lib/pocketbaseClient';
 
 const NAV = [
-    { to: '/', label: 'Avui', Icon: Home },
+    { to: '/', label: 'Inici', Icon: Home },
     { to: '/progres', label: 'Progrés', Icon: LineChart },
     { to: '/ia', label: 'IA', Icon: Bot },
     { to: '/perfil', label: 'Perfil', Icon: UserRound, profile: true },
