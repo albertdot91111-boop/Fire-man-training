@@ -23,7 +23,7 @@ export async function testIntervalsConnection() {
   return { id: data?.id, name: data?.name || data?.firstname || 'Compte connectat' };
 }
 
-export async function getRecentIntervalsActivities(days = 30) {
+export async function getRecentIntervalsActivities(days = 3650) {
   const end = new Date();
   const start = new Date(Date.now() - days * 86400000);
   const iso = (d) => d.toISOString().slice(0, 10);
@@ -32,7 +32,7 @@ export async function getRecentIntervalsActivities(days = 30) {
 
 export async function getActivityStreams(activityId) { return request('streams', { id: activityId }); }
 
-export async function syncRecentIntervalsActivities({ pb, owner, days = 30, typeResolver }) {
+export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, typeResolver }) {
   const activities = await getRecentIntervalsActivities(days);
   let imported = 0;
   for (const activity of activities || []) {
