@@ -88,25 +88,46 @@ export default function AiPage() {
     } finally { setLoading(false); }
   }
 
+  function switchMode(nextMode) {
+    if (nextMode === mode) return;
+    setMode(nextMode);
+    setInput('');
+    setMessages([]);
+  }
+
   return <AppShell title="Assistent IA">
     <Helmet><title>Bomber Coach — BOMBER TRAINER</title></Helmet>
     <div className="rounded-3xl p-5" style={{ backgroundColor: '#f3e8ff', borderLeft: '8px solid #7c3aed' }}>
       <p className="text-xs font-bold tracking-widest text-purple-700">BOMBER COACH</p>
-      <p className="mt-2 text-sm text-slate-700">Coach local per analitzar les teves dades, amb Gemini opcional per a preguntes específiques.</p>
+      <p className="mt-2 text-sm text-slate-700">Tria com vols parlar amb el teu entrenador.</p>
       <p className="mt-2 text-xs font-semibold text-purple-700">{data.sessions.length} sessions · navette no activa fins a confirmació oficial.</p>
     </div>
-    <div className="grid grid-cols-2 gap-2">
-      <button onClick={() => setMode('local')} className={`rounded-xl px-3 py-3 text-sm font-bold ${mode==='local' ? 'bg-purple-700 text-white' : 'bg-white border border-slate-200'}`}>🟢 Coach local · gratis</button>
-      <button onClick={() => setMode('gemini')} className={`rounded-xl px-3 py-3 text-sm font-bold ${mode==='gemini' ? 'bg-purple-700 text-white' : 'bg-white border border-slate-200'}`}>🤖 Pregunta a Gemini</button>
+
+    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5">
+      <button onClick={() => switchMode('local')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode==='local' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>
+        🟢 Local
+        <span className="block text-[11px] font-medium opacity-70">Gratis · il·limitat</span>
+      </button>
+      <button onClick={() => switchMode('gemini')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode==='gemini' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>
+        🤖 Gemini
+        <span className="block text-[11px] font-medium opacity-70">Preguntes específiques</span>
+      </button>
     </div>
-    {mode === 'local' && <div className="grid grid-cols-2 gap-2">{QUICK.map(q => <button key={q} onClick={() => ask(q, 'local')} disabled={loading} className="min-h-[44px] rounded-xl bg-white border border-slate-200 px-3 text-sm font-semibold">{q}</button>)}</div>}
+
+    {mode === 'local' ? <div className="grid grid-cols-2 gap-2">
+      {QUICK.map(q => <button key={q} onClick={() => ask(q, 'local')} disabled={loading} className="min-h-[52px] rounded-xl bg-white border border-slate-200 px-3 text-sm font-semibold shadow-sm">{q}</button>)}
+    </div> : <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm text-slate-700">
+      <b>🤖 Gemini</b><br/>Pregunta el que vulguis sobre les teves dades, entrenament o preparació. Gemini rebrà el resum de les dades del Bomber Trainer.
+    </div>}
+
     <div className="space-y-3 rounded-3xl bg-white border border-slate-200 p-4 shadow-sm min-h-[300px]">
-      {messages.length === 0 && <div className="rounded-2xl bg-purple-50 p-4 text-sm text-slate-700"><b>Hola! 👋</b><br/><br/>{mode === 'local' ? 'El Coach local analitza les teves dades sense API i sense límit.' : 'Gemini serveix per a preguntes específiques i obertes; només consumeix la quota gratuïta del projecte.'}</div>}
+      {messages.length === 0 && <div className="rounded-2xl bg-purple-50 p-4 text-sm text-slate-700"><b>Hola! 👋</b><br/><br/>{mode === 'local' ? 'Soc el Coach local. Tinc les teves dades i puc analitzar-les sense API i sense límit.' : 'Soc Gemini. Fes-me una pregunta específica i analitzaré les dades que tinc del Bomber Trainer.'}</div>}
       {messages.map((m, i) => <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}><div className={`inline-block max-w-[92%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${m.role === 'user' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-800'}`}>{m.content || (loading && i === messages.length - 1 ? 'Pensant…' : '')}</div></div>)}
       <div ref={endRef} />
     </div>
+
     <form onSubmit={e => { e.preventDefault(); ask(input); }} className="sticky bottom-24 flex gap-2 rounded-3xl bg-white border border-slate-200 p-3 shadow-sm">
-      <input value={input} onChange={e => setInput(e.target.value)} placeholder={mode === 'local' ? 'Pregunta sobre les teves dades…' : 'Pregunta específica a Gemini…'} className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-4" />
+      <input value={input} onChange={e => setInput(e.target.value)} placeholder={mode === 'local' ? 'Pregunta sobre les teves dades…' : 'Escriu la pregunta per Gemini…'} className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-4" />
       <button type="submit" disabled={loading} className="min-h-[48px] rounded-xl bg-purple-700 px-5 font-bold text-white">{loading ? '…' : 'Envia'}</button>
     </form>
   </AppShell>;
