@@ -30,8 +30,18 @@ function formatPace(seconds, meters) {
   if (!Number.isFinite(secPerKm) || secPerKm <= 0 || secPerKm > 3600) return '—';
   const whole = Math.round(secPerKm); return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')} /km`;
 }
+function parseWearable(value) {
+  if (!value) return {};
+  if (typeof value === 'string') {
+    try { return JSON.parse(value) || {}; } catch (_) { return {}; }
+  }
+  return value;
+}
 function activityLabel(wearable) { return labels[String(wearable?.activityType || '').toLowerCase()] || wearable?.activityType || wearable?.name || 'Activitat'; }
-function isRunningActivity(session) { return RUNNING_TYPES.has(String(session?.wearable?.activityType || '').toLowerCase()); }
+function isRunningActivity(session) {
+  const wearable = parseWearable(session?.wearable);
+  return RUNNING_TYPES.has(String(wearable?.activityType || '').toLowerCase());
+}
 
 export default function ActivitiesPage() {
   const [sessions, setSessions] = useState([]);
@@ -46,10 +56,8 @@ export default function ActivitiesPage() {
     setLoading(true);
     setLoadError('');
     try {
-      // The PocketBase bt_sessions list rule already scopes records to the
-      // authenticated owner. Do not filter again by nested JSON fields here:
-      // imported records must remain visible even if an older record has a
-      // different wearable shape.
+      // PocketBase can return JSON fields either as objects or as serialized JSON.
+      // Normalize them here so imported Intervals.icu metrics are always visible.
       const rows = await pb.collection('bt_sessions').getFullList({ sort: '-date,-created' });
       setSessions(Array.isArray(rows) ? rows : []);
     } catch (error) {
@@ -98,7 +106,11 @@ export default function ActivitiesPage() {
       {loadError && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center text-sm font-semibold text-red-700">{loadError}</div>}
       {loading ? <div className="rounded-2xl bg-white p-6 text-center text-slate-500">Carregant activitats…</div> : visible.length === 0 ? <div className="rounded-2xl bg-white p-6 text-center text-slate-500">No hi ha activitats sincronitzades amb aquest filtre.</div> :
         <div className="space-y-3">{visible.map(session => {
-          const w = session.wearable || {}; const suunto = w.suunto || {}; const hr = w.heartRate || suunto.heartRate || {}; const dist = metricNumber(w.distanceMeters) || (metricNumber(suunto.distanceKm) ? metricNumber(suunto.distanceKm) * 1000 : null); const duration = metricNumber(w.durationSeconds) || metricNumber(suunto.durationSeconds);
+          const w = parseWearable(session.wearable);
+          const suunto = parseWearable(w.suunto);
+          const hr = parseWearable(w.heartRate) || parseWearable(suunto.heartRate);
+          const dist = metricNumber(w.distanceMeters) || (metricNumber(w.distanceKm) ? metricNumber(w.distanceKm) * 1000 : null) || (metricNumber(suunto.distanceKm) ? metricNumber(suunto.distanceKm) * 1000 : null);
+          const duration = metricNumber(w.durationSeconds) || metricNumber(suunto.durationSeconds) || (metricNumber(session.duration) ? metricNumber(session.duration) * 60 : null);
           return <article key={session.id} className="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-slate-400">{session.date || 'Sense data'}</p><h3 className="mt-1 font-extrabold">{activityLabel(w)}</h3>{w.name && <p className="text-xs text-slate-500">{w.name}</p>}</div><span className="rounded-full px-3 py-1 text-xs font-bold" style={{ backgroundColor: TYPES[session.type]?.soft || '#f1f5f9', color: TYPES[session.type]?.color || '#475569' }}>{session.type === 'manteniment' ? 'Entrenament normal / pendent' : TYPES[session.type]?.label || 'Pendent'}</span></div>
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5"><div className="rounded-xl bg-slate-50 p-3"><span className="text-xs text-slate-500">Temps</span><strong className="block">{formatDuration(duration)}</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="text-xs text-slate-500">Distància</span><strong className="block">{dist ? `${(dist / 1000).toFixed(2)} km` : '—'}</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="text-xs text-slate-500">Ritme</span><strong className="block">{formatPace(duration, dist)}</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="text-xs text-slate-500">FC mitjana</span><strong className="block">{metricNumber(hr.average) ? `${Math.round(hr.average)} bpm` : '—'}</strong></div><div className="rounded-xl bg-slate-50 p-3"><span className="text-xs text-slate-500">FC màxima</span><strong className="block">{metricNumber(hr.max) ? `${Math.round(hr.max)} bpm` : '—'}</strong></div></div>
