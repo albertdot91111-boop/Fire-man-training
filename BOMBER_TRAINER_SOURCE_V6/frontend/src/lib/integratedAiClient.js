@@ -1,9 +1,13 @@
 const integratedAiClient = {
   async stream(path, { body, signal } = {}) {
-    const endpoint = path === '/integrated-ai/stream' ? '/api/integrated-ai' : `/api${path}`;
+    const endpoint = path === '/integrated-ai/stream' ? `/api/integrated-ai?_=${Date.now()}` : `/api${path}`;
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+      },
+      cache: 'no-store',
       body: JSON.stringify(body || {}),
       signal,
     });
