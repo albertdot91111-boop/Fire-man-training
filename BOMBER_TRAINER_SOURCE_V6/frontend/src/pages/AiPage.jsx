@@ -12,17 +12,20 @@ const QUICK = [
   'Com evoluciono?',
   'Quant fa que no treballo cada prova?',
 ];
-const LABELS = { forestal: 'Forestal', estructural: 'Estructural', aquatic: 'Aquàtica', pit: 'Banca', cames: 'Cames', pressbanca: 'Press banca' };
+const LABELS = { forestal: 'Forestal', estructural: 'Estructural', aquatic: 'Aquàtica', pit: 'Banca', cames: 'Cames', pressbanca: 'Press banca', manteniment: 'Entrenament normal' };
+const CHAT_TTL_MS = 72 * 60 * 60 * 1000;
+function chatStorageKey(owner) { return `bt_ai_chat_${owner || 'guest'}`; }
 
 function makeContext(data) {
   const diagnosis = diagnoseBomberProgress(data.sessions || []);
   return JSON.stringify({
     diagnosis,
-    sessions: (data.sessions || []).slice(0, 20),
-    weights: data.weights || [],
-    goals: data.goals || [],
-    material: data.material || [],
-    minutes: data.minutes || '',
+    sessions: (data.sessions || []).slice(0, 80).map((s) => ({
+      id: s.id, type: s.type, date: s.date, duration: s.duration, points: s.points, penalties: s.penalties, notes: s.notes,
+      data: s.data,
+      wearable: s.wearable ? { source: s.wearable.source, activityId: s.wearable.activityId, activityType: s.wearable.activityType, name: s.wearable.name, durationSeconds: s.wearable.durationSeconds, distanceMeters: s.wearable.distanceMeters, heartRate: s.wearable.heartRate, trainingLoad: s.wearable.trainingLoad } : undefined,
+    })),
+    weights: data.weights || [], goals: data.goals || [], material: data.material || [], minutes: data.minutes || '',
   });
 }
 
@@ -38,44 +41,43 @@ function localCoachAnswer(question, data) {
   const q = String(question || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const latest = sessions.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8);
   const focus = diagnosis.priority ? LABELS[diagnosis.priority] || diagnosis.priority : 'pendent de més dades';
-
   if (q.includes('com vaig')) {
-    const rows = diagnosis.tests.map((t) => {
-      const pct = t.readiness?.progress ?? 0;
-      const mark = t.latestTimeSeconds ? `${Math.round(t.latestTimeSeconds)} s` : 'sense registre';
-      return `• **${t.label}**: ${pct}% · últim registre: ${mark}`;
-    }).join('\n');
-    return `### Com vas?\n\n**Prioritat actual:** ${focus}.\n\n${rows}\n\nEl percentatge és orientatiu i només es calcula quan hi ha un objectiu numèric configurat; sense registre és 0%. No considero la navette mentre no hi hagi confirmació oficial.`;
+    const rows = diagnosis.tests.map((t) => { const pct = t.readiness?.progress ?? 0; const mark = t.latestTimeSeconds ? `${Math.round(t.latestTimeSeconds)} s` : 'sense registre'; return `• **${t.label}**: ${pct}% · últim registre: ${mark}`; }).join('\n');
+    return `### Com vas?\n\n**Prioritat actual:** ${focus}.\n\n${rows}\n\nEl percentatge és orientatiu i només es calcula quan hi ha un objectiu numèric configurat; sense registre és 0%. No faig servir la navette mentre no hi hagi confirmació oficial de les bases.`;
   }
   if (q.includes('millorar') || q.includes('punts febles')) {
-    const priority = diagnosis.tests.filter((t) => t.latestTimeSeconds).sort((a, b) => (b.readiness?.progress ?? 0) - (a.readiness?.progress ?? 0))[0];
     return `### Què prioritzaria\n\n**${focus}**.\n\nMira sobretot la distància al teu objectiu, la tendència de les últimes sessions i les penalitzacions. Si hi ha poques dades, no assumiré que una prova és feble sense evidència.`;
   }
   if (q.includes('que faig avui') || q.includes('què faig avui')) {
     return `### Entrenament d'avui\n\n**Focus:** ${focus}.\n\n1. Escalfament 8–10 min.\n2. Treball específic de la prioritat, sense buscar màxim si vens carregat.\n3. Registra temps, repeticions i penalitzacions.\n4. Recuperació i mobilitat.\n\nLa següent sessió s'ha d'adaptar al resultat d'avui.`;
   }
   if (q.includes('evolucion') || q.includes('evolució')) {
-    return `### Evolució recent\n\n${latest.length ? latest.map(s => `• ${s.date || 'sense data'} — ${LABELS[s.type] || s.type} — ${s.duration ? `${s.duration} min` : ''}${s.penalties ? ` · ${s.penalties} penalitzacions` : ''}`).join('\n') : 'Encara no hi ha sessions registrades.'}\n\nLa tendència s'ha de valorar amb diverses sessions, no amb una sola marca.`;
+    return `### Evolució recent\n\n${latest.length ? latest.map(s => `• ${s.date || 'sense data'} — ${LABELS[s.type] || s.type} — ${s.duration ? `${s.duration} min` : ''}${s.penalties ? ` · ${s.penalties} penalitzacions` : ''}${s.wearable?.heartRate?.average ? ` · FC ${Math.round(s.wearable.heartRate.average)} bpm` : ''}`).join('\n') : 'Encara no hi ha sessions registrades.'}\n\nLa tendència s'ha de valorar amb diverses sessions, no amb una sola marca.`;
   }
   if (q.includes('quant fa') || q.includes('no treballo') || q.includes('ultim') || q.includes('últim')) {
     const types = ['estructural', 'forestal', 'aquatic', 'pressbanca', 'cames'];
-    return `### Temps des de l'últim entrenament\n\n${types.map(type => {
-      const row = sessions.filter(s => s.type === type).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0];
-      const days = daysSince(row?.date);
-      return `• **${LABELS[type]}**: ${days === null ? 'mai registrat' : `fa ${days} dies`}`;
-    }).join('\n')}`;
+    return `### Temps des de l'últim entrenament\n\n${types.map(type => { const row = sessions.filter(s => s.type === type).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0]; const days = daysSince(row?.date); return `• **${LABELS[type]}**: ${days === null ? 'mai registrat' : `fa ${days} dies`}`; }).join('\n')}`;
   }
   return `### Anàlisi local\n\nHe revisat les dades disponibles de Bomber Trainer. Ara mateix la prioritat detectada és **${focus}**.\n\nPuc analitzar progrés, punts febles, evolució recent, entrenament recomanat i temps des de l'últim treball sense utilitzar cap API.`;
 }
 
 export default function AiPage() {
+  const ownerId = pb.authStore.record?.id || 'guest';
   const [mode, setMode] = useState('local');
   const [sessions, setSessions] = useState([]);
   const [weights, setWeights] = useState([]);
   const [goals, setGoals] = useState([]);
   const [material, setMaterial] = useState([]);
   const [minutes, setMinutes] = useState('');
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => {
+    try {
+      const raw = localStorage.getItem(chatStorageKey(ownerId));
+      if (!raw) return [];
+      const saved = JSON.parse(raw);
+      if (!saved?.updatedAt || Date.now() - saved.updatedAt > CHAT_TTL_MS) { localStorage.removeItem(chatStorageKey(ownerId)); return []; }
+      return Array.isArray(saved.messages) ? saved.messages : [];
+    } catch (_) { return []; }
+  });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const endRef = useRef(null);
@@ -92,6 +94,11 @@ export default function AiPage() {
 
   const data = useMemo(() => ({ sessions, weights, goals, material, minutes }), [sessions, weights, goals, material, minutes]);
 
+  useEffect(() => {
+    if (!messages.length) { localStorage.removeItem(chatStorageKey(ownerId)); return; }
+    localStorage.setItem(chatStorageKey(ownerId), JSON.stringify({ updatedAt: Date.now(), messages }));
+  }, [messages, ownerId]);
+
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
 
   async function ask(question, forcedMode = mode) {
@@ -106,11 +113,8 @@ export default function AiPage() {
         setMessages(prev => { const copy = [...prev]; copy[copy.length - 1] = { role: 'assistant', content: answer }; return copy; });
         return;
       }
-      const history = messages.filter(m => m.content).slice(-10);
-      const response = await fetch(`/api/gemini?_=${Date.now()}`, {
-        method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-        body: JSON.stringify({ message: [{ type: 'text', text }], history, context: makeContext(data) }),
-      });
+      const history = messages.filter(m => m.content).slice(-40);
+      const response = await fetch(`/api/gemini?_=${Date.now()}`, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ message: [{ type: 'text', text }], history, context: makeContext(data) }) });
       const raw = await response.text();
       if (!response.ok) throw new Error((() => { try { return JSON.parse(raw)?.error || `Error ${response.status}`; } catch (_) { return `Error ${response.status}`; } })());
       const answer = JSON.parse(raw)?.answer;
@@ -121,15 +125,17 @@ export default function AiPage() {
     } finally { setLoading(false); }
   }
 
-  function switchMode(nextMode) { if (nextMode === mode) return; setMode(nextMode); setInput(''); setMessages([]); }
+  function clearConversation() { setMessages([]); localStorage.removeItem(chatStorageKey(ownerId)); }
+  function switchMode(nextMode) { if (nextMode === mode) return; setMode(nextMode); setInput(''); }
 
   return <AppShell title="Assistent IA">
     <Helmet><title>Bomber Coach — BOMBER TRAINER</title></Helmet>
     <div className="rounded-3xl p-5" style={{ backgroundColor: '#f3e8ff', borderLeft: '8px solid #7c3aed' }}>
       <p className="text-xs font-bold tracking-widest text-purple-700">BOMBER COACH</p>
       <p className="mt-2 text-sm text-slate-700">Tria com vols parlar amb el teu entrenador.</p>
-      <p className="mt-2 text-xs font-semibold text-purple-700">{sessions.length} sessions</p>
+      <div className="mt-2 flex items-center justify-between gap-2"><p className="text-xs font-semibold text-purple-700">{sessions.length} sessions</p>{messages.length > 0 && <button type="button" onClick={clearConversation} className="rounded-xl bg-white/80 px-3 py-2 text-xs font-bold text-slate-700 border border-purple-100">🗑️ Esborrar conversa</button>}</div>
     </div>
+    <div className="flex gap-2"><a href="/activitats" className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-bold text-slate-700">⌚ Veure activitats sincronitzades</a></div>
     <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5">
       <button onClick={() => switchMode('local')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode === 'local' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>🟢 Local<span className="block text-[11px] font-medium opacity-70">Gratis · il·limitat</span></button>
       <button onClick={() => switchMode('gemini')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode === 'gemini' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>🤖 Gemini<span className="block text-[11px] font-medium opacity-70">Preguntes específiques</span></button>
