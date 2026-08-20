@@ -19,6 +19,12 @@ async function fetchIntervals(path, apiKey) {
 }
 
 export default async function handler(req, res) {
+  // Activity history is user-specific and must always be fetched fresh.
+  // Prevent Vercel/browser conditional caching from turning a repeated sync
+  // request into a 304 with an empty body.
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+  res.setHeader('Vary', 'x-intervals-api-key');
+
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   const apiKey = String(req.headers['x-intervals-api-key'] || '').trim();
   if (!apiKey) return res.status(401).json({ error: 'Falta la clau API d’Intervals.icu.' });
