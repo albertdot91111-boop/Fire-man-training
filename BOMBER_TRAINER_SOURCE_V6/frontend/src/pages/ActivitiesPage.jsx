@@ -36,16 +36,24 @@ function isRunningActivity(session) { return RUNNING_TYPES.has(String(session?.w
 export default function ActivitiesPage() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(null);
   const [filter, setFilter] = useState('all');
 
   async function load() {
     const owner = pb.authStore.record?.id;
-    if (!owner) return;
+    if (!owner) { setLoadError('No hi ha una sessió d’usuari activa.'); setLoading(false); return; }
     setLoading(true);
+    setLoadError('');
     try {
-      const rows = await pb.collection('bt_sessions').getFullList({ sort: '-date,-created', filter: `owner = "${owner}"` });
+      // PocketBase already applies the bt_sessions owner rule server-side.
+      // Do not add a second owner filter here: after an auth refresh it can
+      // produce an empty result even though the records are accessible.
+      const rows = await pb.collection('bt_sessions').getFullList({ sort: '-date,-created' });
       setSessions(rows.filter(row => row?.wearable?.source === 'intervals.icu' || row?.wearable?.suunto));
+    } catch (error) {
+      setSessions([]);
+      setLoadError(error?.response?.message || error?.message || 'No s’han pogut carregar les activitats sincronitzades.');
     } finally { setLoading(false); }
   }
   useEffect(() => { load().catch(() => setLoading(false)); }, []);
@@ -81,6 +89,7 @@ export default function ActivitiesPage() {
         </div>
       </section>
 
+      {loadError && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center text-sm font-semibold text-red-700">{loadError}</div>}
       {loading ? <div className="rounded-2xl bg-white p-6 text-center text-slate-500">Carregant activitats…</div> : visible.length === 0 ? <div className="rounded-2xl bg-white p-6 text-center text-slate-500">No hi ha activitats sincronitzades amb aquest filtre.</div> :
         <div className="space-y-3">{visible.map(session => {
           const w = session.wearable || {}; const hr = w.heartRate || {}; const dist = metricNumber(w.distanceMeters); const duration = metricNumber(w.durationSeconds);
