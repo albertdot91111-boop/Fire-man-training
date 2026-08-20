@@ -1,0 +1,1 @@
+Backup marker before Bomber Trainer Intervals.icu sync robustness fix. Restore point: commit 3bad8aeecb5bfe07bed166933dc03347c6b3e6bc.
