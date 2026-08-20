@@ -86,10 +86,10 @@ export default function SettingsPage() {
 
     const syncIntervals = async () => {
         if (!intervalsConnected) { setIntervalsStatus('Connecta Intervals.icu abans de sincronitzar.'); return; }
-        setIntervalsBusy(true); setIntervalsStatus('Sincronitzant entrenaments dels últims 30 dies…');
+        setIntervalsBusy(true); setIntervalsStatus('Sincronitzant historial d’Intervals.icu…');
         try {
-            const result = await syncRecentIntervalsActivities({ pb, owner: pb.authStore.record.id, days: 30, typeResolver: (activity) => resolveIntervalsType(activity, intervalsType) });
-            setIntervalsStatus(`Sincronització acabada: ${result.imported} activitat(s) importada(es) de ${result.total} trobada(es).`);
+            const result = await syncRecentIntervalsActivities({ pb, owner: pb.authStore.record.id, days: 3650, typeResolver: (activity) => resolveIntervalsType(activity, intervalsType) });
+            setIntervalsStatus(`Historial sincronitzat: ${result.imported} activitat(s) importada(es) de ${result.total} trobada(es).`);
         } catch (error) { setIntervalsStatus(error?.message || 'No s’ha pogut sincronitzar Intervals.icu.'); }
         finally { setIntervalsBusy(false); }
     };
@@ -105,7 +105,7 @@ export default function SettingsPage() {
                     <input value={intervalsKey} onChange={(e) => setIntervalsKey(e.target.value)} type="password" autoComplete="off" placeholder="Clau API personal d’Intervals.icu" className="min-h-[48px] rounded-xl border border-slate-300 px-3" />
                     <div className="grid gap-2 sm:grid-cols-2">
                         <button type="button" onClick={connectIntervals} disabled={intervalsBusy} className="min-h-[48px] rounded-xl bg-slate-900 px-4 font-bold text-white disabled:opacity-50">{intervalsBusy ? 'Connectant…' : '🔗 Connectar i comprovar'}</button>
-                        <button type="button" onClick={syncIntervals} disabled={intervalsBusy || !intervalsConnected} className="min-h-[48px] rounded-xl border border-slate-300 px-4 font-bold disabled:opacity-50">↻ Sincronitzar últims 30 dies</button>
+                        <button type="button" onClick={syncIntervals} disabled={intervalsBusy || !intervalsConnected} className="min-h-[48px] rounded-xl border border-slate-300 px-4 font-bold disabled:opacity-50">↻ Sincronitzar historial</button>
                     </div>
                     <label className="grid gap-1 text-sm font-semibold">Associació automàtica de les activitats
                         <select value={intervalsType} onChange={(e) => setIntervalsType(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3 font-normal">
@@ -118,7 +118,7 @@ export default function SettingsPage() {
                     </label>
                 </div>
                 {intervalsStatus && <p className={`mt-3 text-sm font-semibold ${intervalsConnected ? 'text-green-700' : 'text-slate-600'}`}>{intervalsStatus}</p>}
-                <p className="mt-3 text-xs text-slate-400">Intervals.icu ofereix API personal per accedir a les teves pròpies dades. En una fase posterior podem passar a OAuth perquè la connexió sigui amb un botó i sense enganxar cap clau.</p>
+                <p className="mt-3 text-xs text-slate-400">La sincronització d’historial revisa fins a 10 anys d’activitats disponibles a Intervals.icu.</p>
             </section>
 
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm">
