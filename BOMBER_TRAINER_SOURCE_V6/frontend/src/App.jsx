@@ -14,6 +14,7 @@ import ProgressPage from './pages/ProgressPage';
 import ProfilePage from './pages/ProfilePage';
 import AiPage from './pages/AiPage';
 import SettingsPage from './pages/SettingsPage';
+import ActivitiesPage from './pages/ActivitiesPage';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -48,6 +49,7 @@ const AuthenticatedApp = () => {
         <Route path="/progres" element={<ProgressPage />} />
         <Route path="/perfil" element={<ProfilePage />} />
         <Route path="/ia" element={<AiPage />} />
+        <Route path="/activitats" element={<ActivitiesPage />} />
         <Route path="/configuracio" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
