@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(oldest) || !/^\d{4}-\d{2}-\d{2}$/.test(newest)) {
       return res.status(400).json({ error: 'Dates oldest/newest no vàlides.' });
     }
-    path = `/api/v1/athlete/0/activities?oldest=${encodeURIComponent(oldest)}&newest=${encodeURIComponent(newest)}`;
+    path = `/api/v1/athlete/0/activities?oldest=${encodeURIComponent(oldest)}&newest=${encodeURIComponent(newest)}&limit=5000`;
   } else if (action === 'streams') {
     const id = String(req.query?.id || '').trim();
     if (!id) return res.status(400).json({ error: 'Falta activity id.' });
