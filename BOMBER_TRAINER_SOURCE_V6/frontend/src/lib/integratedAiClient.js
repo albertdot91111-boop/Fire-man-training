@@ -1,34 +1,42 @@
 const integratedAiClient = {
   async stream(path, { body, signal } = {}) {
-    const endpoint = path === '/integrated-ai/stream'
-      ? `/api/integrated-ai/stream?_=${Date.now()}`
-      : `/api${path}`;
+    const payload = JSON.stringify(body || {});
+    const headers = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+    };
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-      },
-      cache: 'no-store',
-      body: JSON.stringify(body || {}),
-      signal,
-    });
+    const endpoints = path === '/integrated-ai/stream'
+      ? [`/api/integrated-ai/stream?_=${Date.now()}`, '/api/integrated-ai']
+      : [`/api${path}`];
 
-    if (!response.ok) {
-      let message = `Error de IA (${response.status})`;
+    let lastError = null;
+
+    for (const endpoint of endpoints) {
       try {
-        const data = await response.json();
-        message = data?.error || data?.detail || message;
-      } catch (_) {}
-      throw new Error(message);
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          cache: 'no-store',
+          body: payload,
+          signal,
+        });
+
+        if (response.ok && response.body) return response;
+
+        let message = `Error de IA (${response.status})`;
+        try {
+          const data = await response.json();
+          message = data?.error || data?.detail || message;
+        } catch (_) {}
+        lastError = new Error(message);
+      } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        lastError = error;
+      }
     }
 
-    if (!response.body) {
-      throw new Error('El servidor d’IA no ha retornat cap flux.');
-    }
-
-    return response;
+    throw lastError || new Error('No s’ha pogut connectar amb la IA.');
   },
 };
 
