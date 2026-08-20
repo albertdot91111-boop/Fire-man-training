@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   try {
     const body = req.body || {};
     const question = Array.isArray(body.message) ? body.message.map(part => part?.text || '').filter(Boolean).join('\n') : String(body.message || '');
-    const history = Array.isArray(body.history) ? body.history.filter(m => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').slice(-10) : [];
+    const history = Array.isArray(body.history) ? body.history.filter(m => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').slice(-40) : [];
     const context = typeof body.context === 'string' ? body.context : '';
     const contents = [...history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })), { role: 'user', parts: [{ text: `${question}\n\n[CONTEXT BOMBER TRAINER]\n${context}` }] }];
     const systemInstruction = { parts: [{ text: `Ets Bomber Coach de BOMBER TRAINER, especialitzat en la preparació de Bombers de Catalunya.
