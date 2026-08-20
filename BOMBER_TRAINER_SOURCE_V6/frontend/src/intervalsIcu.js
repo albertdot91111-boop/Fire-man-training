@@ -52,9 +52,6 @@ async function fetchChunkResilient(chunk, onProgress, label = '') {
   try {
     return { rows: await request('activities', chunk), failedRanges: [] };
   } catch (error) {
-    // A single problematic historical range must never abort the whole 10-year
-    // import. Split it until it is small enough to identify/skip only the bad
-    // range. This also protects against intermittent upstream 5xx/304 responses.
     const from = new Date(`${chunk.oldest}T00:00:00Z`).getTime();
     const to = new Date(`${chunk.newest}T00:00:00Z`).getTime();
     const days = Math.round((to - from) / 86400000) + 1;
@@ -81,7 +78,7 @@ export async function getRecentIntervalsActivities(days = 3650, onProgress) {
     onProgress?.(`Sincronitzant historial… bloc ${i + 1}/${chunks.length}`);
     const result = await fetchChunkResilient(chunks[i], onProgress, `bloc ${i + 1}/${chunks.length}`);
     for (const activity of Array.isArray(result.rows) ? result.rows : []) {
-      const key = String(activity?.id || `${activity?.start_date_local || ''}|${activity?.name || ''}`);
+      const key = String(activity?.id || `${activity?.start_date_local || ''}|${activity?.name || activity?.activity_name || ''}`);
       if (!seen.has(key)) { seen.add(key); all.push(activity); }
     }
     failedRanges.push(...result.failedRanges);
@@ -92,6 +89,48 @@ export async function getRecentIntervalsActivities(days = 3650, onProgress) {
 
 export async function getActivityStreams(activityId) { return request('streams', { id: activityId }); }
 
+const firstValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
+const numericValue = (...values) => {
+  const value = firstValue(...values);
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+function buildWearable(activity, existingWearable = {}) {
+  const activityId = firstValue(activity?.id, existingWearable?.activityId);
+  const activityType = firstValue(activity?.type, activity?.activity_type, activity?.sport_type, existingWearable?.activityType);
+  const name = firstValue(activity?.name, activity?.activity_name, activity?.title, existingWearable?.name);
+  const startDateLocal = firstValue(activity?.start_date_local, activity?.startDateLocal, existingWearable?.startDateLocal);
+  const durationSeconds = numericValue(activity?.moving_time, activity?.movingTime, activity?.elapsed_time, activity?.elapsedTime, existingWearable?.durationSeconds);
+  const distanceMeters = numericValue(activity?.distance, activity?.distance_meters, activity?.distanceMeters, existingWearable?.distanceMeters);
+  const averageHeartRate = numericValue(activity?.average_heartrate, activity?.averageHeartRate, activity?.average_hr, existingWearable?.heartRate?.average);
+  const maxHeartRate = numericValue(activity?.max_heartrate, activity?.maxHeartRate, activity?.max_hr, existingWearable?.heartRate?.max);
+  const minHeartRate = numericValue(activity?.min_heartrate, activity?.minHeartRate, activity?.min_hr, existingWearable?.heartRate?.min);
+  const calories = numericValue(activity?.calories, existingWearable?.calories);
+  const trainingLoad = numericValue(activity?.icu_training_load, activity?.training_load, activity?.trainingLoad, existingWearable?.trainingLoad);
+
+  return {
+    ...existingWearable,
+    source: 'intervals.icu',
+    activityId,
+    activityType: activityType || null,
+    name: name || null,
+    startDateLocal: startDateLocal || null,
+    durationSeconds,
+    distanceMeters,
+    heartRate: {
+      ...(existingWearable?.heartRate || {}),
+      average: averageHeartRate || null,
+      max: maxHeartRate || null,
+      min: minHeartRate || null,
+    },
+    calories: calories || null,
+    trainingLoad: trainingLoad || null,
+    streamTypes: firstValue(activity?.stream_types, activity?.streamTypes, existingWearable?.streamTypes) || [],
+    syncedAt: new Date().toISOString(),
+  };
+}
+
 export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, typeResolver, onProgress }) {
   const result = await getRecentIntervalsActivities(days, onProgress);
   const activities = result.activities || [];
@@ -99,49 +138,36 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
   let updated = 0;
   let skipped = 0;
 
-  // Do one owner-scoped read instead of filtering on nested JSON fields. The
-  // latter is fragile in PocketBase and was the reason the sync could stop
-  // after several blocks with a generic "Something went wrong" message.
   const existingRows = await pb.collection('bt_sessions').getFullList({ sort: '-created', filter: `owner = "${owner}"` });
   const byActivityId = new Map();
   for (const row of existingRows) {
-    const id = row?.wearable?.source === 'intervals.icu' ? String(row?.wearable?.activityId || '') : '';
+    const rawWearable = row?.wearable;
+    const wearable = typeof rawWearable === 'string' ? (() => { try { return JSON.parse(rawWearable); } catch (_) { return {}; } })() : (rawWearable || {});
+    const id = wearable?.source === 'intervals.icu' ? String(wearable?.activityId || '') : '';
     if (id && !byActivityId.has(id)) byActivityId.set(id, row);
   }
 
   for (const activity of activities) {
     try {
-      const date = String(activity?.start_date_local || '').slice(0, 10);
+      const date = String(firstValue(activity?.start_date_local, activity?.startDateLocal) || '').slice(0, 10);
       if (!date) { skipped += 1; continue; }
       const type = typeResolver?.(activity) || null;
       const activityId = String(activity?.id || '');
-      const wearable = {
-        source: 'intervals.icu',
-        activityId: activity?.id,
-        activityType: activity?.type,
-        name: activity?.name || null,
-        startDateLocal: activity?.start_date_local,
-        durationSeconds: Number(activity?.moving_time || activity?.elapsed_time || 0),
-        distanceMeters: Number(activity?.distance || 0),
-        heartRate: {
-          average: Number(activity?.average_heartrate || 0) || null,
-          max: Number(activity?.max_heartrate || 0) || null,
-          min: Number(activity?.min_heartrate || 0) || null,
-        },
-        calories: Number(activity?.calories || 0) || null,
-        trainingLoad: Number(activity?.icu_training_load || 0) || null,
-        streamTypes: activity?.stream_types || [],
-        syncedAt: new Date().toISOString(),
-      };
       const existing = activityId ? byActivityId.get(activityId) : null;
+      const rawExistingWearable = existing?.wearable;
+      const existingWearable = typeof rawExistingWearable === 'string' ? (() => { try { return JSON.parse(rawExistingWearable); } catch (_) { return {}; } })() : (rawExistingWearable || {});
+      const wearable = buildWearable(activity, existingWearable);
+
       if (existing) {
-        await pb.collection('bt_sessions').update(existing.id, { wearable, date });
+        const patch = { wearable, date };
+        if (wearable.durationSeconds > 0) patch.duration = Math.round((wearable.durationSeconds / 60) * 10) / 10;
+        await pb.collection('bt_sessions').update(existing.id, patch);
         updated += 1;
       } else {
         const created = await pb.collection('bt_sessions').create({
           type: type || 'manteniment',
           date,
-          duration: Math.round((wearable.durationSeconds / 60) * 10) / 10,
+          duration: wearable.durationSeconds > 0 ? Math.round((wearable.durationSeconds / 60) * 10) / 10 : 0,
           points: 0,
           notes: 'Activitat sincronitzada des d’Intervals.icu · pendent d’associar',
           data: [],
@@ -152,8 +178,6 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
         imported += 1;
       }
     } catch (_) {
-      // One malformed activity must not prevent the rest of the history from
-      // being imported. It remains available in Intervals.icu for inspection.
       skipped += 1;
     }
   }
