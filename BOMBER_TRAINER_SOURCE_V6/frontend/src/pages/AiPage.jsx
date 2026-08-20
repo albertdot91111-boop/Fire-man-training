@@ -4,151 +4,54 @@ import AppShell from '@/components/AppShell';
 import pb from '@/lib/pocketbaseClient';
 import { diagnoseBomberProgress } from '@/aiEngine';
 
-const QUICK = [
-  'Com vaig?',
-  'Què haig de millorar?',
-  'Què faig avui?',
-  'Quins punts febles tinc?',
-  'Com evoluciono?',
-  'Quant fa que no treballo cada prova?',
-];
+const QUICK = ['Com vaig?', 'Què haig de millorar?', 'Què faig avui?', 'Quins punts febles tinc?', 'Com evoluciono?', 'Quant fa que no treballo cada prova?'];
 const LABELS = { forestal: 'Forestal', estructural: 'Estructural', aquatic: 'Aquàtica', pit: 'Banca', cames: 'Cames', pressbanca: 'Press banca', manteniment: 'Entrenament normal' };
 const CHAT_TTL_MS = 72 * 60 * 60 * 1000;
 function chatStorageKey(owner) { return `bt_ai_chat_${owner || 'guest'}`; }
+function pacePerKm(durationSeconds, distanceMeters) {
+  const s = Number(durationSeconds), m = Number(distanceMeters);
+  if (!Number.isFinite(s) || !Number.isFinite(m) || s <= 0 || m <= 0) return null;
+  const sec = Math.round(s / (m / 1000));
+  return Number.isFinite(sec) && sec > 0 && sec <= 3600 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}/km` : null;
+}
 
 function makeContext(data) {
   const diagnosis = diagnoseBomberProgress(data.sessions || []);
+  const sorted = (data.sessions || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const classified = sorted.filter(s => ['forestal', 'estructural', 'aquatic', 'pressbanca', 'cames'].includes(s.type));
+  const selected = [...classified, ...sorted.filter(s => !classified.includes(s))].filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i).slice(0, 150);
   return JSON.stringify({
     diagnosis,
-    sessions: (data.sessions || []).slice(0, 80).map((s) => ({
-      id: s.id, type: s.type, date: s.date, duration: s.duration, points: s.points, penalties: s.penalties, notes: s.notes,
+    sessions: selected.map((s) => ({
+      id: s.id, type: s.type, classification: s.type, date: s.date, duration: s.duration, points: s.points, penalties: s.penalties, notes: s.notes,
       data: s.data,
-      wearable: s.wearable ? { source: s.wearable.source, activityId: s.wearable.activityId, activityType: s.wearable.activityType, name: s.wearable.name, durationSeconds: s.wearable.durationSeconds, distanceMeters: s.wearable.distanceMeters, heartRate: s.wearable.heartRate, trainingLoad: s.wearable.trainingLoad } : undefined,
+      wearable: s.wearable ? { source: s.wearable.source, activityId: s.wearable.activityId, activityType: s.wearable.activityType, name: s.wearable.name, durationSeconds: s.wearable.durationSeconds, distanceMeters: s.wearable.distanceMeters, pacePerKm: pacePerKm(s.wearable.durationSeconds, s.wearable.distanceMeters), heartRate: s.wearable.heartRate, calories: s.wearable.calories, trainingLoad: s.wearable.trainingLoad, streamTypes: s.wearable.streamTypes } : undefined,
     })),
     weights: data.weights || [], goals: data.goals || [], material: data.material || [], minutes: data.minutes || '',
   });
 }
-
-function daysSince(date) {
-  if (!date) return null;
-  const t = Date.parse(date);
-  return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : null;
-}
-
+function daysSince(date) { if (!date) return null; const t = Date.parse(date); return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : null; }
 function localCoachAnswer(question, data) {
-  const sessions = Array.isArray(data.sessions) ? data.sessions : [];
-  const diagnosis = diagnoseBomberProgress(sessions);
-  const q = String(question || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const latest = sessions.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8);
-  const focus = diagnosis.priority ? LABELS[diagnosis.priority] || diagnosis.priority : 'pendent de més dades';
-  if (q.includes('com vaig')) {
-    const rows = diagnosis.tests.map((t) => { const pct = t.readiness?.progress ?? 0; const mark = t.latestTimeSeconds ? `${Math.round(t.latestTimeSeconds)} s` : 'sense registre'; return `• **${t.label}**: ${pct}% · últim registre: ${mark}`; }).join('\n');
-    return `### Com vas?\n\n**Prioritat actual:** ${focus}.\n\n${rows}\n\nEl percentatge és orientatiu i només es calcula quan hi ha un objectiu numèric configurat; sense registre és 0%. No faig servir la navette mentre no hi hagi confirmació oficial de les bases.`;
-  }
-  if (q.includes('millorar') || q.includes('punts febles')) {
-    return `### Què prioritzaria\n\n**${focus}**.\n\nMira sobretot la distància al teu objectiu, la tendència de les últimes sessions i les penalitzacions. Si hi ha poques dades, no assumiré que una prova és feble sense evidència.`;
-  }
-  if (q.includes('que faig avui') || q.includes('què faig avui')) {
-    return `### Entrenament d'avui\n\n**Focus:** ${focus}.\n\n1. Escalfament 8–10 min.\n2. Treball específic de la prioritat, sense buscar màxim si vens carregat.\n3. Registra temps, repeticions i penalitzacions.\n4. Recuperació i mobilitat.\n\nLa següent sessió s'ha d'adaptar al resultat d'avui.`;
-  }
-  if (q.includes('evolucion') || q.includes('evolució')) {
-    return `### Evolució recent\n\n${latest.length ? latest.map(s => `• ${s.date || 'sense data'} — ${LABELS[s.type] || s.type} — ${s.duration ? `${s.duration} min` : ''}${s.penalties ? ` · ${s.penalties} penalitzacions` : ''}${s.wearable?.heartRate?.average ? ` · FC ${Math.round(s.wearable.heartRate.average)} bpm` : ''}`).join('\n') : 'Encara no hi ha sessions registrades.'}\n\nLa tendència s'ha de valorar amb diverses sessions, no amb una sola marca.`;
-  }
-  if (q.includes('quant fa') || q.includes('no treballo') || q.includes('ultim') || q.includes('últim')) {
-    const types = ['estructural', 'forestal', 'aquatic', 'pressbanca', 'cames'];
-    return `### Temps des de l'últim entrenament\n\n${types.map(type => { const row = sessions.filter(s => s.type === type).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0]; const days = daysSince(row?.date); return `• **${LABELS[type]}**: ${days === null ? 'mai registrat' : `fa ${days} dies`}`; }).join('\n')}`;
-  }
+  const sessions = Array.isArray(data.sessions) ? data.sessions : []; const diagnosis = diagnoseBomberProgress(sessions); const q = String(question || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const latest = sessions.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8); const focus = diagnosis.priority ? LABELS[diagnosis.priority] || diagnosis.priority : 'pendent de més dades';
+  if (q.includes('com vaig')) { const rows = diagnosis.tests.map((t) => { const pct = t.readiness?.progress ?? 0; const mark = t.latestTimeSeconds ? `${Math.round(t.latestTimeSeconds)} s` : 'sense registre'; return `• **${t.label}**: ${pct}% · últim registre: ${mark}`; }).join('\n'); return `### Com vas?\n\n**Prioritat actual:** ${focus}.\n\n${rows}\n\nEl percentatge és orientatiu i només es calcula quan hi ha un objectiu numèric configurat; sense registre és 0%. No faig servir la navette mentre no hi hagi confirmació oficial de les bases.`; }
+  if (q.includes('millorar') || q.includes('punts febles')) return `### Què prioritzaria\n\n**${focus}**.\n\nMira sobretot la distància al teu objectiu, la tendència de les últimes sessions i les penalitzacions. Si hi ha poques dades, no assumiré que una prova és feble sense evidència.`;
+  if (q.includes('que faig avui') || q.includes('què faig avui')) return `### Entrenament d'avui\n\n**Focus:** ${focus}.\n\n1. Escalfament 8–10 min.\n2. Treball específic de la prioritat, sense buscar màxim si vens carregat.\n3. Registra temps, repeticions i penalitzacions.\n4. Recuperació i mobilitat.\n\nLa següent sessió s'ha d'adaptar al resultat d'avui.`;
+  if (q.includes('evolucion') || q.includes('evolució')) return `### Evolució recent\n\n${latest.length ? latest.map(s => `• ${s.date || 'sense data'} — ${LABELS[s.type] || s.type} — ${s.duration ? `${s.duration} min` : ''}${s.penalties ? ` · ${s.penalties} penalitzacions` : ''}${s.wearable?.heartRate?.average ? ` · FC ${Math.round(s.wearable.heartRate.average)} bpm` : ''}${pacePerKm(s.wearable?.durationSeconds, s.wearable?.distanceMeters) ? ` · ritme ${pacePerKm(s.wearable?.durationSeconds, s.wearable?.distanceMeters)}` : ''}`).join('\n') : 'Encara no hi ha sessions registrades.'}\n\nLa tendència s'ha de valorar amb diverses sessions, no amb una sola marca.`;
+  if (q.includes('quant fa') || q.includes('no treballo') || q.includes('ultim') || q.includes('últim')) { const types = ['estructural', 'forestal', 'aquatic', 'pressbanca', 'cames']; return `### Temps des de l'últim entrenament\n\n${types.map(type => { const row = sessions.filter(s => s.type === type).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0]; const days = daysSince(row?.date); return `• **${LABELS[type]}**: ${days === null ? 'mai registrat' : `fa ${days} dies`}`; }).join('\n')}`; }
   return `### Anàlisi local\n\nHe revisat les dades disponibles de Bomber Trainer. Ara mateix la prioritat detectada és **${focus}**.\n\nPuc analitzar progrés, punts febles, evolució recent, entrenament recomanat i temps des de l'últim treball sense utilitzar cap API.`;
 }
 
 export default function AiPage() {
-  const ownerId = pb.authStore.record?.id || 'guest';
-  const [mode, setMode] = useState('local');
-  const [sessions, setSessions] = useState([]);
-  const [weights, setWeights] = useState([]);
-  const [goals, setGoals] = useState([]);
-  const [material, setMaterial] = useState([]);
-  const [minutes, setMinutes] = useState('');
-  const [messages, setMessages] = useState(() => {
-    try {
-      const raw = localStorage.getItem(chatStorageKey(ownerId));
-      if (!raw) return [];
-      const saved = JSON.parse(raw);
-      if (!saved?.updatedAt || Date.now() - saved.updatedAt > CHAT_TTL_MS) { localStorage.removeItem(chatStorageKey(ownerId)); return []; }
-      return Array.isArray(saved.messages) ? saved.messages : [];
-    } catch (_) { return []; }
-  });
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const endRef = useRef(null);
-
-  useEffect(() => {
-    const owner = pb.authStore.record?.id;
-    if (!owner) return;
-    Promise.all([
-      pb.collection('bt_sessions').getFullList({ sort: '-date', filter: `owner = \"${owner}\"` }),
-      pb.collection('bt_weights').getFullList({ sort: '-date', filter: `owner = \"${owner}\"` }).catch(() => []),
-      pb.collection('bt_goals').getFullList({ sort: '-created', filter: `owner = \"${owner}\"` }).catch(() => []),
-    ]).then(([s, w, g]) => { setSessions(s); setWeights(w); setGoals(g); }).catch(() => {});
-  }, []);
-
+  const ownerId = pb.authStore.record?.id || 'guest'; const [mode, setMode] = useState('local'); const [sessions, setSessions] = useState([]); const [weights, setWeights] = useState([]); const [goals, setGoals] = useState([]); const [material, setMaterial] = useState([]); const [minutes, setMinutes] = useState('');
+  const [messages, setMessages] = useState(() => { try { const raw = localStorage.getItem(chatStorageKey(ownerId)); if (!raw) return []; const saved = JSON.parse(raw); if (!saved?.updatedAt || Date.now() - saved.updatedAt > CHAT_TTL_MS) { localStorage.removeItem(chatStorageKey(ownerId)); return []; } return Array.isArray(saved.messages) ? saved.messages : []; } catch (_) { return []; } });
+  const [input, setInput] = useState(''); const [loading, setLoading] = useState(false); const endRef = useRef(null);
+  useEffect(() => { const owner = pb.authStore.record?.id; if (!owner) return; Promise.all([pb.collection('bt_sessions').getFullList({ sort: '-date', filter: `owner = \"${owner}\"` }), pb.collection('bt_weights').getFullList({ sort: '-date', filter: `owner = \"${owner}\"` }).catch(() => []), pb.collection('bt_goals').getFullList({ sort: '-created', filter: `owner = \"${owner}\"` }).catch(() => [])]).then(([s, w, g]) => { setSessions(s); setWeights(w); setGoals(g); }).catch(() => {}); }, []);
   const data = useMemo(() => ({ sessions, weights, goals, material, minutes }), [sessions, weights, goals, material, minutes]);
-
-  useEffect(() => {
-    if (!messages.length) { localStorage.removeItem(chatStorageKey(ownerId)); return; }
-    localStorage.setItem(chatStorageKey(ownerId), JSON.stringify({ updatedAt: Date.now(), messages }));
-  }, [messages, ownerId]);
-
+  useEffect(() => { if (!messages.length) { localStorage.removeItem(chatStorageKey(ownerId)); return; } localStorage.setItem(chatStorageKey(ownerId), JSON.stringify({ updatedAt: Date.now(), messages })); }, [messages, ownerId]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
-
-  async function ask(question, forcedMode = mode) {
-    const text = String(question || '').trim();
-    if (!text || loading) return;
-    const user = { role: 'user', content: text };
-    setMessages(prev => [...prev, user, { role: 'assistant', content: '' }]);
-    setInput(''); setLoading(true);
-    try {
-      if (forcedMode === 'local') {
-        const answer = localCoachAnswer(text, data);
-        setMessages(prev => { const copy = [...prev]; copy[copy.length - 1] = { role: 'assistant', content: answer }; return copy; });
-        return;
-      }
-      const history = messages.filter(m => m.content).slice(-40);
-      const response = await fetch(`/api/gemini?_=${Date.now()}`, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ message: [{ type: 'text', text }], history, context: makeContext(data) }) });
-      const raw = await response.text();
-      if (!response.ok) throw new Error((() => { try { return JSON.parse(raw)?.error || `Error ${response.status}`; } catch (_) { return `Error ${response.status}`; } })());
-      const answer = JSON.parse(raw)?.answer;
-      if (!answer) throw new Error('Gemini ha retornat una resposta buida.');
-      setMessages(prev => { const copy = [...prev]; copy[copy.length - 1] = { role: 'assistant', content: answer }; return copy; });
-    } catch (error) {
-      setMessages(prev => { const copy = [...prev]; copy[copy.length - 1] = { role: 'assistant', content: `No he pogut completar la consulta.\n\n${error.message}` }; return copy; });
-    } finally { setLoading(false); }
-  }
-
+  async function ask(question, forcedMode = mode) { const text = String(question || '').trim(); if (!text || loading) return; const user = { role: 'user', content: text }; setMessages(prev => [...prev, user, { role: 'assistant', content: '' }]); setInput(''); setLoading(true); try { if (forcedMode === 'local') { const answer = localCoachAnswer(text, data); setMessages(prev => { const copy = [...prev]; copy[copy.length - 1] = { role: 'assistant', content: answer }; return copy; }); return; } const history = messages.filter(m => m.content).slice(-40); const response = await fetch(`/api/gemini?_=${Date.now()}`, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ message: [{ type: 'text', text }], history, context: makeContext(data) }) }); const raw = await response.text(); if (!response.ok) throw new Error((() => { try { return JSON.parse(raw)?.error || `Error ${response.status}`; } catch (_) { return `Error ${response.status}`; } })()); const answer = JSON.parse(raw)?.answer; if (!answer) throw new Error('Gemini ha retornat una resposta buida.'); setMessages(prev => { const copy = [...prev]; copy[copy.length - 1] = { role: 'assistant', content: answer }; return copy; }); } catch (error) { setMessages(prev => { const copy = [...prev]; copy[copy.length - 1] = { role: 'assistant', content: `No he pogut completar la consulta.\n\n${error.message}` }; return copy; }); } finally { setLoading(false); } }
   function clearConversation() { setMessages([]); localStorage.removeItem(chatStorageKey(ownerId)); }
   function switchMode(nextMode) { if (nextMode === mode) return; setMode(nextMode); setInput(''); }
-
-  return <AppShell title="Assistent IA">
-    <Helmet><title>Bomber Coach — BOMBER TRAINER</title></Helmet>
-    <div className="rounded-3xl p-5" style={{ backgroundColor: '#f3e8ff', borderLeft: '8px solid #7c3aed' }}>
-      <p className="text-xs font-bold tracking-widest text-purple-700">BOMBER COACH</p>
-      <p className="mt-2 text-sm text-slate-700">Tria com vols parlar amb el teu entrenador.</p>
-      <div className="mt-2 flex items-center justify-between gap-2"><p className="text-xs font-semibold text-purple-700">{sessions.length} sessions</p>{messages.length > 0 && <button type="button" onClick={clearConversation} className="rounded-xl bg-white/80 px-3 py-2 text-xs font-bold text-slate-700 border border-purple-100">🗑️ Esborrar conversa</button>}</div>
-    </div>
-    <div className="flex gap-2"><a href="/activitats" className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-bold text-slate-700">⌚ Veure activitats sincronitzades</a></div>
-    <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5">
-      <button onClick={() => switchMode('local')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode === 'local' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>🟢 Local<span className="block text-[11px] font-medium opacity-70">Gratis · il·limitat</span></button>
-      <button onClick={() => switchMode('gemini')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode === 'gemini' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>🤖 Gemini<span className="block text-[11px] font-medium opacity-70">Preguntes específiques</span></button>
-    </div>
-    {mode === 'local' ? <div className="grid grid-cols-2 gap-2">{QUICK.map(q => <button key={q} onClick={() => ask(q, 'local')} disabled={loading} className="min-h-[52px] rounded-xl bg-white border border-slate-200 px-3 text-sm font-semibold shadow-sm">{q}</button>)}</div> : <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm text-slate-700"><b>🤖 Gemini</b><br />Pregunta el que vulguis sobre les teves dades, entrenament o preparació. Gemini rebrà el resum de les dades del Bomber Trainer.</div>}
-    <div className="space-y-3 rounded-3xl bg-white border border-slate-200 p-4 shadow-sm min-h-[300px]">
-      {messages.length === 0 && <div className="rounded-2xl bg-purple-50 p-4 text-sm text-slate-700"><b>Hola! 👋</b><br /><br />{mode === 'local' ? 'Soc el Coach local. Tinc les teves dades i puc analitzar-les sense API i sense límit.' : 'Soc Gemini. Fes-me una pregunta específica i analitzaré les dades que tinc del Bomber Trainer.'}</div>}
-      {messages.map((m, i) => <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}><div className={`inline-block max-w-[92%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${m.role === 'user' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-800'}`}>{m.content || (loading && i === messages.length - 1 ? 'Pensant…' : '')}</div></div>)}
-      <div ref={endRef} />
-    </div>
-    <form onSubmit={e => { e.preventDefault(); ask(input); }} className="sticky bottom-24 flex gap-2 rounded-3xl bg-white border border-slate-200 p-3 shadow-sm">
-      <input value={input} onChange={e => setInput(e.target.value)} placeholder={mode === 'local' ? 'Pregunta sobre les teves dades…' : 'Escriu la pregunta per Gemini…'} className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-4" />
-      <button type="submit" disabled={loading} className="min-h-[48px] rounded-xl bg-purple-700 px-5 font-bold text-white">{loading ? '…' : 'Envia'}</button>
-    </form>
-  </AppShell>;
+  return <AppShell title="Assistent IA"><Helmet><title>Bomber Coach — BOMBER TRAINER</title></Helmet><div className="rounded-3xl p-5" style={{ backgroundColor: '#f3e8ff', borderLeft: '8px solid #7c3aed' }}><p className="text-xs font-bold tracking-widest text-purple-700">BOMBER COACH</p><p className="mt-2 text-sm text-slate-700">Tria com vols parlar amb el teu entrenador.</p><div className="mt-2 flex items-center justify-between gap-2"><p className="text-xs font-semibold text-purple-700">{sessions.length} sessions</p>{messages.length > 0 && <button type="button" onClick={clearConversation} className="rounded-xl bg-white/80 px-3 py-2 text-xs font-bold text-slate-700 border border-purple-100">🗑️ Esborrar conversa</button>}</div></div><div className="flex gap-2"><a href="/activitats" className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-bold text-slate-700">⌚ Veure activitats sincronitzades</a></div><div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5"><button onClick={() => switchMode('local')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode === 'local' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>🟢 Local<span className="block text-[11px] font-medium opacity-70">Gratis · il·limitat</span></button><button onClick={() => switchMode('gemini')} className={`rounded-xl px-3 py-3 text-sm font-bold transition ${mode === 'gemini' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>🤖 Gemini<span className="block text-[11px] font-medium opacity-70">Preguntes específiques</span></button></div>{mode === 'local' ? <div className="grid grid-cols-2 gap-2">{QUICK.map(q => <button key={q} onClick={() => ask(q, 'local')} disabled={loading} className="min-h-[52px] rounded-xl bg-white border border-slate-200 px-3 text-sm font-semibold shadow-sm">{q}</button>)}</div> : <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm text-slate-700"><b>🤖 Gemini</b><br />Pregunta el que vulguis sobre les teves dades, entrenament o preparació. Gemini rebrà el resum de les dades del Bomber Trainer.</div>}<div className="space-y-3 rounded-3xl bg-white border border-slate-200 p-4 shadow-sm min-h-[300px]">{messages.length === 0 && <div className="rounded-2xl bg-purple-50 p-4 text-sm text-slate-700"><b>Hola! 👋</b><br /><br />{mode === 'local' ? 'Soc el Coach local. Tinc les teves dades i puc analitzar-les sense API i sense límit.' : 'Soc Gemini. Fes-me una pregunta específica i analitzaré les dades que tinc del Bomber Trainer.'}</div>}{messages.map((m, i) => <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}><div className={`inline-block max-w-[92%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${m.role === 'user' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-800'}`}>{m.content || (loading && i === messages.length - 1 ? 'Pensant…' : '')}</div></div>)}<div ref={endRef} /></div><form onSubmit={e => { e.preventDefault(); ask(input); }} className="sticky bottom-24 flex gap-2 rounded-3xl bg-white border border-slate-200 p-3 shadow-sm"><input value={input} onChange={e => setInput(e.target.value)} placeholder={mode === 'local' ? 'Pregunta sobre les teves dades…' : 'Escriu la pregunta per Gemini…'} className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-4" /><button type="submit" disabled={loading} className="min-h-[48px] rounded-xl bg-purple-700 px-5 font-bold text-white">{loading ? '…' : 'Envia'}</button></form></AppShell>;
 }
