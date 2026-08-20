@@ -96,12 +96,29 @@ const numericValue = (...values) => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
+function durationSecondsValue(...values) {
+  const value = firstValue(...values);
+  if (value === undefined || value === null || value === '') return 0;
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : 0;
+  const text = String(value).trim();
+  if (!text) return 0;
+  if (text.includes(':')) {
+    const parts = text.split(':').map(Number);
+    if (parts.every(Number.isFinite)) {
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+    }
+  }
+  const n = Number(text);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 function buildWearable(activity, existingWearable = {}) {
   const activityId = firstValue(activity?.id, existingWearable?.activityId);
   const activityType = firstValue(activity?.type, activity?.activity_type, activity?.sport_type, existingWearable?.activityType);
   const name = firstValue(activity?.name, activity?.activity_name, activity?.title, existingWearable?.name);
   const startDateLocal = firstValue(activity?.start_date_local, activity?.startDateLocal, activity?.start_date, existingWearable?.startDateLocal);
-  const durationSeconds = numericValue(activity?.moving_time, activity?.movingTime, activity?.elapsed_time, activity?.elapsedTime, activity?.duration, activity?.duration_seconds, existingWearable?.durationSeconds);
+  const durationSeconds = durationSecondsValue(activity?.moving_time, activity?.movingTime, activity?.elapsed_time, activity?.elapsedTime, activity?.duration, activity?.duration_seconds, existingWearable?.durationSeconds);
   const distanceMeters = numericValue(activity?.distance, activity?.distance_meters, activity?.distanceMeters, existingWearable?.distanceMeters);
   const distanceKm = numericValue(activity?.distance_km, activity?.distanceKm, existingWearable?.distanceKm);
   const averageHeartRate = numericValue(activity?.average_heartrate, activity?.averageHeartRate, activity?.average_hr, activity?.avg_hr, existingWearable?.heartRate?.average);
@@ -159,11 +176,11 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
   let skipped = 0;
 
   const existingRows = await pb.collection('bt_sessions').getFullList({ sort: '-created', filter: `owner = "${owner}"` });
-  const knownKeys = new Set();
+  const knownRows = new Map();
   for (const row of existingRows) {
     const rawWearable = row?.wearable;
     const wearable = typeof rawWearable === 'string' ? (() => { try { return JSON.parse(rawWearable); } catch (_) { return {}; } })() : (rawWearable || {});
-    if (wearable?.source === 'intervals.icu') knownKeys.add(wearableMatchKey(wearable, row?.date));
+    if (wearable?.source === 'intervals.icu') knownRows.set(wearableMatchKey(wearable, row?.date), { row, wearable });
   }
 
   for (const activity of activities) {
@@ -171,9 +188,24 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
       const date = String(firstValue(activity?.start_date_local, activity?.startDateLocal, activity?.start_date) || '').slice(0, 10);
       if (!date) { skipped += 1; continue; }
       const key = activityMatchKey(activity);
-      if (knownKeys.has(key)) { existing += 1; continue; }
-
+      const existingRecord = knownRows.get(key);
       const type = typeResolver?.(activity) || null;
+
+      if (existingRecord) {
+        // Repair previously imported records as well: older versions could save
+        // durations such as "00:04:00" as zero because Number("00:04:00") is NaN.
+        const wearable = buildWearable(activity, existingRecord.wearable);
+        const patch = {
+          date,
+          duration: wearable.durationSeconds > 0 ? Math.round((wearable.durationSeconds / 60) * 10) / 10 : existingRecord.row.duration || 0,
+          wearable,
+        };
+        if (type && existingRecord.row.type === 'manteniment') patch.type = type;
+        await pb.collection('bt_sessions').update(existingRecord.row.id, patch);
+        existing += 1;
+        continue;
+      }
+
       const wearable = buildWearable(activity);
       await pb.collection('bt_sessions').create({
         type: type || 'manteniment',
@@ -185,7 +217,7 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
         wearable,
         owner,
       });
-      knownKeys.add(key);
+      knownRows.set(key, { row: { id: null, date, duration: 0, type: type || 'manteniment' }, wearable });
       imported += 1;
     } catch (_) {
       skipped += 1;
@@ -194,7 +226,7 @@ export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, ty
 
   return {
     imported,
-    updated: 0,
+    updated: existing,
     existing,
     skipped,
     total: activities.length,
