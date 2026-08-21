@@ -11,6 +11,19 @@ const MAINTENANCE_SERIES = 4;
 const TIME_FIELDS = new Set(['temps', 'tram1', 'tram2', 'tram3']);
 const FIELD_LABELS = { pes: 'Pes (kg)', pesLlast: 'Pes llast (kg)', reps: 'Repeticions', series: 'Sèries', temps: 'Temps (min)', descans: 'Descans (s)', tram1: 'Tram 1 (min)', tram2: 'Tram 2 (min)', tram3: 'Tram 3 (min)' };
 
+// Accepta tant 0:30 com 0,30 per indicar 30 segons.
+// També manté el format actual en minuts per a valors decimals normals.
+const parseTrainingTime = (value) => {
+    const text = String(value ?? '').trim();
+    if (!text) return 0;
+    if (text.includes(':')) return parseTime(text);
+    if (/^\d+\s*,\s*\d{1,2}$/.test(text)) {
+        const [minutes, seconds] = text.split(',').map((part) => Number(part.trim()));
+        if (Number.isFinite(minutes) && Number.isFinite(seconds) && seconds >= 0 && seconds < 60) return minutes * 60 + seconds;
+    }
+    return parseTime(value);
+};
+
 const structuralGraphicKind = (name) => {
     if (/Discos/i.test(name)) return 'discos';
     if (/Kettlebells/i.test(name)) return 'kettlebells';
@@ -45,16 +58,16 @@ export default function TrainPage() {
     const setExerciseName = (i, value) => setExerciseNames((prev) => prev.map((n, j) => j === i ? value : n));
     const setMaintenanceWeight = (i, value) => setMaintenanceWeights((prev) => prev.map((w, j) => j === i ? value : w));
     const toggleIncident = (name) => setIncidents((prev) => prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]);
-    const forestalTotalSeconds = useMemo(() => isForestal ? entries.slice(0, 3).reduce((sum, entry) => sum + parseTime(entry?.temps), 0) : 0, [entries, isForestal]);
-    const structuralTotalSeconds = useMemo(() => isStructural ? entries.reduce((sum, entry) => sum + parseTime(entry?.temps), 0) : 0, [entries, isStructural]);
+    const forestalTotalSeconds = useMemo(() => isForestal ? entries.slice(0, 3).reduce((sum, entry) => sum + parseTrainingTime(entry?.temps), 0) : 0, [entries, isForestal]);
+    const structuralTotalSeconds = useMemo(() => isStructural ? entries.reduce((sum, entry) => sum + parseTrainingTime(entry?.temps), 0) : 0, [entries, isStructural]);
     const save = async (kind) => {
         setBusy(true); setError('');
         try {
             const points = kind === 'complet' ? POINTS.complet : kind === 'manteniment' ? POINTS.manteniment : POINTS.minim;
             const data = activePlan.map((p, i) => {
                 if (!isMaintenance) {
-                    if (isForestal && p.name === 'CIRCUIT COMPLET') return { exercici: p.name, temps: forestalTotalSeconds, tram1: parseTime(entries[0]?.temps), tram2: parseTime(entries[1]?.temps), tram3: parseTime(entries[2]?.temps) };
-                    return Object.fromEntries(Object.entries({ exercici: p.name, ...entries[i] }).map(([key, value]) => [key, TIME_FIELDS.has(key) ? parseTime(value) : value]));
+                    if (isForestal && p.name === 'CIRCUIT COMPLET') return { exercici: p.name, temps: forestalTotalSeconds, tram1: parseTrainingTime(entries[0]?.temps), tram2: parseTrainingTime(entries[1]?.temps), tram3: parseTrainingTime(entries[2]?.temps) };
+                    return Object.fromEntries(Object.entries({ exercici: p.name, ...entries[i] }).map(([key, value]) => [key, TIME_FIELDS.has(key) ? parseTrainingTime(value) : value]));
                 }
                 return { exercici: exerciseNames[i].trim() || p.name, llastKg: String(maintenanceWeights[i] ?? '').trim(), series: (entries[i]?.series || []).slice(0, MAINTENANCE_SERIES).map((v) => String(v ?? '').trim()) };
             });
