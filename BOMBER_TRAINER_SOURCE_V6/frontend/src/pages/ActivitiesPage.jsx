@@ -53,7 +53,6 @@ export default function ActivitiesPage() {
     if (!owner) { setLoadError('No hi ha una sessió d’usuari activa.'); setLoading(false); return; }
     setLoading(true); setLoadError('');
     try {
-      // Explicit owner filter: PocketBase rules can otherwise return an empty/incomplete list.
       const rows = await pb.collection('bt_sessions').getFullList({ sort: '-date,-created', filter: `owner = "${owner}"` });
       setSessions(Array.isArray(rows) ? rows : []);
     } catch (error) {
@@ -90,7 +89,10 @@ export default function ActivitiesPage() {
         const w = parseWearable(session.wearable); const suunto = parseWearable(w.suunto);
         const heart = w.heartRate && (w.heartRate.average || w.heartRate.max || w.heartRate.min) ? parseWearable(w.heartRate) : parseWearable(suunto.heartRate);
         const dist = metricNumber(w.distanceMeters) || (metricNumber(w.distanceKm) ? w.distanceKm * 1000 : null) || (metricNumber(suunto.distanceKm) ? suunto.distanceKm * 1000 : null);
-        const duration = metricNumber(w.durationSeconds) || metricNumber(suunto.durationSeconds) || (metricNumber(session.duration) ? session.duration * 60 : null);
+        // Never derive a workout duration from the app's local session.duration.
+        // That field may contain a planned/manual value (e.g. 4 or 5 minutes),
+        // not the real elapsed time recorded by Intervals.icu/Suunto.
+        const duration = metricNumber(w.durationSeconds) || metricNumber(suunto.durationSeconds);
         const calories = metricNumber(w.calories) || metricNumber(suunto.calories);
         const activityType = normalizeType(w.activityType); const isRunning = RUNNING_TYPES.has(activityType); const isCycling = CYCLING_TYPES.has(activityType);
         const metrics = isRunning
