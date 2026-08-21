@@ -10,9 +10,9 @@ const READ_CACHE_MS = 60_000;
 const readCache = new Map();
 const inFlightReads = new Map();
 const OPTIONAL_COLLECTIONS = new Set(['bt_weights', 'bt_goals']);
+const WRITE_METHODS = new Set(['create', 'update', 'upsert', 'delete']);
 
 const cacheKey = (name, args) => `${pocketbaseClient.authStore.record?.id || 'guest'}|${name}|${JSON.stringify(args || [])}`;
-
 export const clearRequestCache = () => readCache.clear();
 
 const originalCollection = pocketbaseClient.collection.bind(pocketbaseClient);
@@ -20,6 +20,15 @@ pocketbaseClient.collection = (name) => {
     const service = originalCollection(name);
     return new Proxy(service, {
         get(target, property, receiver) {
+            if (WRITE_METHODS.has(property)) {
+                const method = Reflect.get(target, property, receiver);
+                if (typeof method !== 'function') return method;
+                return async (...args) => {
+                    const result = await method.apply(target, args);
+                    clearRequestCache();
+                    return result;
+                };
+            }
             if (property !== 'getFullList') return Reflect.get(target, property, receiver);
             return async (...args) => {
                 const key = cacheKey(name, args);
@@ -55,6 +64,5 @@ pocketbaseClient.collection = (name) => {
 };
 
 pocketbaseClient.clearRequestCache = clearRequestCache;
-
 export default pocketbaseClient;
 export { pocketbaseClient };
