@@ -3,6 +3,13 @@ import pb from '@/lib/pocketbaseClient';
 
 const AuthContext = createContext(null);
 
+const isDefinitiveAuthFailure = (error) => {
+  const status = Number(error?.status || error?.response?.code || 0);
+  return status === 401 || status === 403;
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(pb.authStore.record || null);
   const [isAuthenticated, setIsAuthenticated] = useState(pb.authStore.isValid);
@@ -10,7 +17,6 @@ export const AuthProvider = ({ children }) => {
   const [authChecked, setAuthChecked] = useState(false);
   const [authError] = useState(null);
 
-  // Keep React state in sync with the PocketBase auth store (login/logout/OAuth).
   useEffect(() => {
     const unsubscribe = pb.authStore.onChange(() => {
       setUser(pb.authStore.record || null);
@@ -23,18 +29,26 @@ export const AuthProvider = ({ children }) => {
     setIsLoadingAuth(true);
     try {
       if (pb.authStore.isValid) {
-        // Validate the persisted token against the server rather than trusting it blindly.
-        await pb.collection('users').authRefresh();
-        setUser(pb.authStore.record);
-        setIsAuthenticated(true);
+        // A temporary PocketBase/network error must NOT log the user out.
+        // Only a definitive 401/403 means that the persisted token is invalid.
+        try {
+          await pb.collection('users').authRefresh();
+          setUser(pb.authStore.record);
+          setIsAuthenticated(true);
+        } catch (error) {
+          if (isDefinitiveAuthFailure(error)) {
+            pb.authStore.clear();
+            setUser(null);
+            setIsAuthenticated(false);
+          } else {
+            setUser(pb.authStore.record || null);
+            setIsAuthenticated(Boolean(pb.authStore.isValid));
+          }
+        }
       } else {
         setUser(null);
         setIsAuthenticated(false);
       }
-    } catch {
-      pb.authStore.clear();
-      setUser(null);
-      setIsAuthenticated(false);
     } finally {
       setIsLoadingAuth(false);
       setAuthChecked(true);
@@ -46,14 +60,26 @@ export const AuthProvider = ({ children }) => {
   }, [checkUserAuth]);
 
   const login = useCallback(async (email, password) => {
-    await pb.collection('users').authWithPassword(email, password);
-    setUser(pb.authStore.record);
-    setIsAuthenticated(true);
-    setAuthChecked(true);
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await pb.collection('users').authWithPassword(email, password);
+        setUser(pb.authStore.record);
+        setIsAuthenticated(true);
+        setAuthChecked(true);
+        return;
+      } catch (error) {
+        lastError = error;
+        const status = Number(error?.status || error?.response?.code || 0);
+        // Retry transient/network/server failures once, but do not retry bad credentials.
+        if (status === 400 || status === 401 || status === 403) break;
+        if (attempt === 0) await wait(700);
+      }
+    }
+    throw lastError || new Error('No s’ha pogut iniciar sessió.');
   }, []);
 
   const signup = useCallback(async (email, password) => {
-    // Direct signup (no OTP): create the auth record then authenticate.
     await pb.collection('users').create({ email, password, passwordConfirm: password });
     await pb.collection('users').authWithPassword(email, password);
     setUser(pb.authStore.record);
