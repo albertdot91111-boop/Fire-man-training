@@ -1,94 +1,37 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
+import { TYPES } from '@/lib/btData';
 
-const STORAGE_PREFIX = 'bt_nutrition_';
-const FREE_MEAL_PREFIX = 'bt_nutrition_free_meal_';
-const MOTIVATION = ['La preparació també es construeix a taula. 🔥','Entrenar fort és una part. Menjar bé és l’altra. 💪','Avui has fet una altra passa cap al bomber que vols ser. 🚒','Disciplina també vol dir cuidar el que menges. 👊','Un dia ben fet. Demà, un altre. Mantén la ratxa. 🔥'];
-const FREE_MEAL_MESSAGES = ['😎 Avui toca gaudir! És el teu àpat lliure de la setmana. Sense culpa. Demà tornem al pla. 🔥','🍕 Àpat lliure activat! Gaudeix-lo. Un àpat no espatlla una bona setmana. 💪','❤️ La constància no és fer-ho perfecte. Gaudeix del teu àpat lliure i demà continuem.','😏 Avui hi ha capritx. Perfecte! Gaudeix-lo i demà tornem a la rutina.'];
-function dateKey(date = new Date()) { const y = date.getFullYear(); const m = String(date.getMonth()+1).padStart(2,'0'); const d = String(date.getDate()).padStart(2,'0'); return `${y}-${m}-${d}`; }
-function weekKey(date = new Date()) { const d = new Date(date.getFullYear(),date.getMonth(),date.getDate()); const day=d.getDay()||7; d.setDate(d.getDate()-day+1); return dateKey(d); }
-function storageKey(owner,date){return `${STORAGE_PREFIX}${owner||'guest'}_${date}`;}
-function freeMealKey(owner,week){return `${FREE_MEAL_PREFIX}${owner||'guest'}_${week}`;}
+const STORAGE_PREFIX='bt_nutrition_'; const FREE_MEAL_PREFIX='bt_nutrition_free_meal_';
+const MOTIVATION=['La preparació també es construeix a taula. 🔥','Entrenar fort és una part. Menjar bé és l’altra. 💪','Avui has fet una altra passa cap al bomber que vols ser. 🚒','Disciplina també vol dir cuidar el que menges. 👊','Un dia ben fet. Demà, un altre. Mantén la ratxa. 🔥'];
+const FREE_MEAL_MESSAGES=['😎 Avui toca gaudir! És el teu àpat lliure de la setmana. Sense culpa. Demà, tornem al pla. 🔥','🍕 Àpat lliure activat! Gaudeix-lo. Un àpat no espatlla una bona setmana. 💪','❤️ La constància no és fer-ho perfecte. Gaudeix del teu àpat lliure i demà continuem.','😏 Avui hi ha capritx. Perfecte! Gaudeix-lo i demà tornem a la rutina.'];
+const MANUAL_TYPES=['forestal','estructural','aquatic','pressbanca','manteniment','circuit','rapid'];
+function dateKey(date=new Date()){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
+function weekKey(date=new Date()){const d=new Date(date.getFullYear(),date.getMonth(),date.getDate());const day=d.getDay()||7;d.setDate(d.getDate()-day+1);return dateKey(d);}
+function storageKey(owner,date){return `${STORAGE_PREFIX}${owner||'guest'}_${date}`;} function freeMealKey(owner,week){return `${FREE_MEAL_PREFIX}${owner||'guest'}_${week}`;}
 export function readNutritionStatus(owner,date){try{const value=localStorage.getItem(storageKey(owner,date));return ['good','bad','free_meal'].includes(value)?value:null;}catch(_){return null;}}
-function writeStatus(owner,date,value){try{localStorage.setItem(storageKey(owner,date),value);}catch(_){}
-}
+function writeStatus(owner,date,value){try{if(value)localStorage.setItem(storageKey(owner,date),value);else localStorage.removeItem(storageKey(owner,date));}catch(_){} }
 function hasFreeMeal(owner,week){try{return localStorage.getItem(freeMealKey(owner,week))==='1';}catch(_){return false;}}
-function useFreeMeal(owner,week){try{localStorage.setItem(freeMealKey(owner,week),'1');}catch(_){}
-}
+function useFreeMeal(owner,week){try{localStorage.setItem(freeMealKey(owner,week),'1');}catch(_){} }
+function typeLabel(type){return TYPES[type]?.label||({aquatic:'Natació',forestal:'Circuit forestal',estructural:'Estructural',pressbanca:'Press banca',manteniment:'Manteniment',circuit:'Circuit',rapid:'Ràpid'}[type]||type);}
 
 export default function NutritionDaily(){
-  const location=useLocation();
-  const owner=pb.authStore.record?.id||'guest';
-  const [now,setNow]=useState(new Date());
-  const [status,setStatus]=useState(()=>readNutritionStatus(owner,dateKey()));
-  const [open,setOpen]=useState(false);
-  const [manualOpen,setManualOpen]=useState(false);
-  const [permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported');
-  const decorateBusy=useRef(false);
-  const today=useMemo(()=>dateKey(now),[now]);
-  const week=useMemo(()=>weekKey(now),[now]);
-  const freeMealUsed=useMemo(()=>hasFreeMeal(owner,week),[owner,week,status]);
-  const due=useMemo(()=>now.getHours()>=20&&!status,[now,status]);
-
-  useEffect(()=>{const timer=window.setInterval(()=>setNow(new Date()),60000);return()=>window.clearInterval(timer);},[]);
-  useEffect(()=>{setStatus(readNutritionStatus(owner,today));},[owner,today]);
-  useEffect(()=>{
-    if(!due)return;
-    setOpen(true);
-    if(permission==='granted'){
-      const notificationKey=`bt_nutrition_notified_${owner}_${today}`; let already=false;
-      try{already=localStorage.getItem(notificationKey)==='1';}catch(_){}
-      if(!already){try{new Notification('🍽️ Com has anat avui?',{body:'Marca el teu dia o gaudeix del teu àpat lliure de la setmana.',tag:'bt-nutrition-daily'});}catch(_){} try{localStorage.setItem(notificationKey,'1');}catch(_){} }
-    }
-  },[due,permission,owner,today]);
-  const save=(value)=>{if(value==='free_meal')useFreeMeal(owner,week);writeStatus(owner,today,value);setStatus(value);setOpen(false);setManualOpen(false);window.dispatchEvent(new CustomEvent('bt:nutrition-updated',{detail:{date:today,status:value,owner}}));};
-  const requestNotifications=async()=>{if(typeof Notification==='undefined')return;try{setPermission(await Notification.requestPermission());}catch(_){} };
-
-  useEffect(()=>{
-    if(location.pathname!=='/progres')return undefined;
-    let timer=null;
-    const decorateCalendar=()=>{
-      if(decorateBusy.current)return;
-      const heading=Array.from(document.querySelectorAll('h2')).find(el=>el.textContent?.trim()==='Calendari del mes');
-      const section=heading?.closest('section');
-      if(!section)return;
-      decorateBusy.current=true;
-      try{
-        const buttons=Array.from(section.querySelectorAll('button'));
-        const base=new Date(now.getFullYear(),now.getMonth(),1);
-        buttons.forEach(button=>{
-          button.querySelectorAll('[data-bt-nutrition-marker]').forEach(marker=>marker.remove());
-          button.style.boxShadow='';
-          const spans=Array.from(button.querySelectorAll(':scope > span'));
-          const daySpan=spans.find(span=>/^\d{1,2}$/.test(span.textContent?.trim()||''));
-          const day=Number(daySpan?.textContent?.trim()||'');
-          if(!Number.isInteger(day)||day<1||day>31)return;
-          const key=dateKey(new Date(base.getFullYear(),base.getMonth(),day));
-          const markerStatus=readNutritionStatus(owner,key);
-          if(!markerStatus)return;
-          const outline=markerStatus==='bad'?'#dc2626':'#16a34a';
-          button.style.boxShadow=`inset 0 0 0 3px ${outline}`;
-          button.style.borderRadius='0.75rem';
-          button.title=markerStatus==='free_meal'?'Àpat lliure de la setmana':markerStatus==='good'?'Nutrició correcta':'Nutrició a millorar';
-        });
-      }finally{
-        window.setTimeout(()=>{decorateBusy.current=false;},0);
-      }
-    };
-    const schedule=()=>{if(timer)window.clearTimeout(timer);timer=window.setTimeout(decorateCalendar,80);};
-    const observer=new MutationObserver(schedule);
-    observer.observe(document.body,{childList:true,subtree:true});
-    window.addEventListener('bt:nutrition-updated',schedule);
-    schedule();
-    return()=>{observer.disconnect();window.removeEventListener('bt:nutrition-updated',schedule);if(timer)window.clearTimeout(timer);decorateBusy.current=false;};
-  },[location.pathname,owner,now,status]);
-
-  if(!pb.authStore.isValid)return null;
-  const dialogOpen=(open&&due)||(manualOpen&&!status);
-  return <>
-    {!status&&!due&&!manualOpen&&<button type="button" onClick={()=>setManualOpen(true)} className="fixed bottom-24 left-4 z-50 rounded-full border border-green-200 bg-white px-4 py-3 text-sm font-extrabold text-slate-800 shadow-xl">🍽️ Revisar nutrició ara</button>}
-    {due&&!open&&<button type="button" onClick={()=>setOpen(true)} className="fixed bottom-24 right-4 z-50 rounded-full bg-slate-900 px-4 py-3 text-sm font-extrabold text-white shadow-xl">🍽️ Nutrició d'avui</button>}
-    {dialogOpen&&<div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/40 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="nutrition-heading"><section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold tracking-[0.18em] text-green-700">CONTROL DIARI</p><h2 id="nutrition-heading" className="mt-1 text-2xl font-extrabold">🍽️ Com has anat avui?</h2></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">20:00</span></div><p className="mt-3 text-sm font-medium text-slate-600">Has seguit el teu pla avui? I recorda: tens <strong>1 àpat lliure per setmana</strong>.</p><p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm font-bold text-slate-700">{status==='free_meal'?FREE_MEAL_MESSAGES[now.getDate()%FREE_MEAL_MESSAGES.length]:MOTIVATION[now.getDate()%MOTIVATION.length]}</p><div className={`mt-5 grid ${freeMealUsed?'grid-cols-2':'grid-cols-3'} gap-2`}><button type="button" onClick={()=>save('good')} className="min-h-[64px] rounded-2xl bg-green-600 px-2 text-sm font-extrabold text-white">🟢 Pla complert</button>{!freeMealUsed&&<button type="button" onClick={()=>save('free_meal')} className="min-h-[64px] rounded-2xl bg-amber-500 px-2 text-sm font-extrabold text-white">🍕 Àpat lliure</button>}<button type="button" onClick={()=>save('bad')} className="min-h-[64px] rounded-2xl bg-red-600 px-2 text-sm font-extrabold text-white">🔴 Fora del pla</button></div>{freeMealUsed&&<p className="mt-3 text-center text-xs font-bold text-amber-700">🍕 Ja has utilitzat l'àpat lliure d'aquesta setmana.</p>}{permission!=='granted'&&permission!=='unsupported'&&<button type="button" onClick={requestNotifications} className="mt-3 min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700">🔔 Activar notificacions</button>}<button type="button" onClick={()=>{setOpen(false);setManualOpen(false);}} className="mt-3 w-full py-2 text-sm font-bold text-slate-400">Tancar</button><p className="mt-2 text-center text-xs text-slate-400">🟢 dia complert · 🍕 àpat lliure · 🔴 dia fora del pla</p></section></div>}
-  </>;
+ const location=useLocation(); const owner=pb.authStore.record?.id||'guest'; const [now,setNow]=useState(new Date()); const [status,setStatus]=useState(()=>readNutritionStatus(owner,dateKey())); const [open,setOpen]=useState(false); const [manualOpen,setManualOpen]=useState(false); const [permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported'); const [selectedDate,setSelectedDate]=useState(null); const [selectedSessions,setSelectedSessions]=useState([]); const [manualType,setManualType]=useState('manteniment'); const [manualMinutes,setManualMinutes]=useState(''); const [calendarBusy,setCalendarBusy]=useState(false); const decorateBusy=useRef(false);
+ const today=useMemo(()=>dateKey(now),[now]); const week=useMemo(()=>weekKey(now),[now]); const freeMealUsed=useMemo(()=>hasFreeMeal(owner,week),[owner,week,status]); const due=useMemo(()=>now.getHours()>=20&&!status,[now,status]);
+ useEffect(()=>{const timer=window.setInterval(()=>setNow(new Date()),60000);return()=>window.clearInterval(timer);},[]); useEffect(()=>{setStatus(readNutritionStatus(owner,today));},[owner,today]);
+ useEffect(()=>{if(!due)return;setOpen(true);if(permission==='granted'){const key=`bt_nutrition_notified_${owner}_${today}`;let already=false;try{already=localStorage.getItem(key)==='1';}catch(_){}if(!already){try{new Notification('🍽️ Com has anat avui?',{body:'Marca el teu dia o gaudeix del teu àpat lliure de la setmana.',tag:'bt-nutrition-daily'});}catch(_){}try{localStorage.setItem(key,'1');}catch(_){} }}},[due,permission,owner,today]);
+ const save=(value,date=today)=>{if(value==='free_meal')useFreeMeal(owner,weekKey(new Date(`${date}T12:00:00`)));writeStatus(owner,date,value);if(date===today)setStatus(value);setOpen(false);setManualOpen(false);window.dispatchEvent(new CustomEvent('bt:nutrition-updated',{detail:{date,status:value,owner}}));};
+ const requestNotifications=async()=>{if(typeof Notification==='undefined')return;try{setPermission(await Notification.requestPermission());}catch(_){} };
+ const loadDay=async(date)=>{setSelectedDate(date);setCalendarBusy(true);try{const rows=await pb.collection('bt_sessions').getFullList({sort:'-created',filter:`owner = \"${owner}\" && date = \"${date}\"`});setSelectedSessions(rows);}catch(_){setSelectedSessions([]);}finally{setCalendarBusy(false);}};
+ const addManualSession=async()=>{if(!selectedDate||!manualType)return;setCalendarBusy(true);try{const minutes=Math.max(0,Number(manualMinutes)||0);const rec=await pb.collection('bt_sessions').create({owner,date:selectedDate,type:manualType,duration:minutes,points:0,notes:'Sessió afegida manualment des del calendari',data:[],wearable:{source:'manual-calendar'}});setSelectedSessions(rows=>[rec,...rows]);setManualMinutes('');window.dispatchEvent(new CustomEvent('bt:progress-updated'));}catch(error){window.alert(error?.response?.message||error?.message||'No s’ha pogut guardar la sessió.');}finally{setCalendarBusy(false);}};
+ const deleteManualSession=async(session)=>{if(!session?.id||calendarBusy)return;if(!window.confirm(`Eliminar ${typeLabel(session.type)} del ${selectedDate}?`))return;setCalendarBusy(true);try{await pb.collection('bt_sessions').delete(session.id);setSelectedSessions(rows=>rows.filter(row=>row.id!==session.id));window.dispatchEvent(new CustomEvent('bt:progress-updated'));}catch(error){window.alert(error?.response?.message||error?.message||'No s’ha pogut eliminar la sessió.');}finally{setCalendarBusy(false);}};
+ useEffect(()=>{if(location.pathname!=='/progres')return undefined;let timer=null;const decorate=()=>{if(decorateBusy.current)return;const heading=Array.from(document.querySelectorAll('h2')).find(el=>el.textContent?.trim()==='Calendari del mes');const section=heading?.closest('section');if(!section)return;decorateBusy.current=true;try{const buttons=Array.from(section.querySelectorAll('button'));const base=new Date(now.getFullYear(),now.getMonth(),1);buttons.forEach(button=>{button.querySelectorAll('[data-bt-nutrition-marker]').forEach(marker=>marker.remove());button.style.boxShadow='';button.style.borderRadius='';const spans=Array.from(button.querySelectorAll(':scope > span'));const daySpan=spans.find(span=>/^\d{1,2}$/.test(span.textContent?.trim()||''));const day=Number(daySpan?.textContent?.trim()||'');if(!Number.isInteger(day)||day<1||day>31)return;const key=dateKey(new Date(base.getFullYear(),base.getMonth(),day));const markerStatus=readNutritionStatus(owner,key);if(markerStatus){const outline=markerStatus==='bad'?'#dc2626':'#16a34a';button.style.boxShadow=`inset 0 0 0 3px ${outline}`;button.style.borderRadius='0.75rem';button.title=markerStatus==='free_meal'?'Àpat lliure de la setmana':markerStatus==='good'?'Nutrició correcta':'Nutrició a millorar';}button.onclick=(event)=>{event.preventDefault();event.stopPropagation();loadDay(key);};});}finally{window.setTimeout(()=>{decorateBusy.current=false;},0);}};const schedule=()=>{if(timer)window.clearTimeout(timer);timer=window.setTimeout(decorate,80);};const observer=new MutationObserver(schedule);observer.observe(document.body,{childList:true,subtree:true});window.addEventListener('bt:nutrition-updated',schedule);window.addEventListener('bt:progress-updated',schedule);schedule();return()=>{observer.disconnect();window.removeEventListener('bt:nutrition-updated',schedule);window.removeEventListener('bt:progress-updated',schedule);if(timer)window.clearTimeout(timer);decorateBusy.current=false;};},[location.pathname,owner,now,status]);
+ if(!pb.authStore.isValid)return null; const dialogOpen=(open&&due)||(manualOpen&&!status); const selectedNutrition=selectedDate?readNutritionStatus(owner,selectedDate):null;
+ return <>
+ {!status&&!due&&!manualOpen&&<button type="button" onClick={()=>setManualOpen(true)} className="fixed bottom-24 left-4 z-50 rounded-full border border-green-200 bg-white px-4 py-3 text-sm font-extrabold text-slate-800 shadow-xl">🍽️ Revisar nutrició ara</button>}
+ {due&&!open&&<button type="button" onClick={()=>setOpen(true)} className="fixed bottom-24 right-4 z-50 rounded-full bg-slate-900 px-4 py-3 text-sm font-extrabold text-white shadow-xl">🍽️ Nutrició d'avui</button>}
+ {dialogOpen&&<div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/40 p-4 sm:items-center" role="dialog" aria-modal="true"><section className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold tracking-[0.18em] text-green-700">CONTROL DIARI</p><h2 className="mt-1 text-2xl font-extrabold">🍽️ Com has anat avui?</h2></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold">20:00</span></div><p className="mt-3 text-sm font-medium text-slate-600">Has seguit el teu pla avui? Tens <strong>1 àpat lliure per setmana</strong>.</p><p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm font-bold text-slate-700">{status==='free_meal'?FREE_MEAL_MESSAGES[now.getDate()%FREE_MEAL_MESSAGES.length]:MOTIVATION[now.getDate()%MOTIVATION.length]}</p><div className={`mt-5 grid ${freeMealUsed?'grid-cols-2':'grid-cols-3'} gap-2`}><button type="button" onClick={()=>save('good')} className="min-h-[64px] rounded-2xl bg-green-600 px-2 text-sm font-extrabold text-white">🟢 Pla complert</button>{!freeMealUsed&&<button type="button" onClick={()=>save('free_meal')} className="min-h-[64px] rounded-2xl bg-amber-500 px-2 text-sm font-extrabold text-white">🍕 Àpat lliure</button>}<button type="button" onClick={()=>save('bad')} className="min-h-[64px] rounded-2xl bg-red-600 px-2 text-sm font-extrabold text-white">🔴 Fora del pla</button></div><button type="button" onClick={()=>{setOpen(false);setManualOpen(false);}} className="mt-3 w-full py-2 text-sm font-bold text-slate-400">Tancar</button></section></div>}
+ {selectedDate&&<div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/50 p-4 sm:items-center" role="dialog" aria-modal="true"><section className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl max-h-[90vh] overflow-y-auto"><div className="flex items-start justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">CALENDARI PERSONAL</p><h2 className="mt-1 text-2xl font-extrabold">{selectedDate}</h2></div><button type="button" onClick={()=>setSelectedDate(null)} className="rounded-full bg-slate-100 px-3 py-2 font-bold">✕</button></div><div className="mt-4"><p className="text-sm font-extrabold">Nutrició</p><div className="mt-2 grid grid-cols-3 gap-2"><button type="button" onClick={()=>save('good',selectedDate)} className={`min-h-[52px] rounded-2xl border-2 font-extrabold ${selectedNutrition==='good'?'border-green-600 bg-green-50 text-green-700':'border-slate-200'}`}>🟢 Bé</button><button type="button" onClick={()=>save('free_meal',selectedDate)} className={`min-h-[52px] rounded-2xl border-2 font-extrabold ${selectedNutrition==='free_meal'?'border-amber-500 bg-amber-50 text-amber-700':'border-slate-200'}`}>🍕 Lliure</button><button type="button" onClick={()=>save('bad',selectedDate)} className={`min-h-[52px] rounded-2xl border-2 font-extrabold ${selectedNutrition==='bad'?'border-red-600 bg-red-50 text-red-700':'border-slate-200'}`}>🔴 No</button></div><button type="button" onClick={()=>save(null,selectedDate)} className="mt-2 w-full py-2 text-xs font-bold text-slate-400">Treure marca de nutrició</button></div><div className="mt-5 border-t border-slate-100 pt-5"><p className="text-sm font-extrabold">Sessions d'aquest dia</p>{selectedSessions.length?<div className="mt-2 space-y-2">{selectedSessions.map(session=><div key={session.id} className="flex items-center justify-between rounded-2xl bg-slate-50 p-3"><div><p className="font-bold">{typeLabel(session.type)}</p><p className="text-xs text-slate-500">{Number(session.duration||0)>0?`${session.duration} min`:'Sense durada'}{session.wearable?.source==='manual-calendar'?' · apuntada manualment':''}</p></div><button type="button" disabled={calendarBusy} onClick={()=>deleteManualSession(session)} className="rounded-xl px-3 py-2 text-sm font-bold text-red-600">−</button></div>)}</div>:<p className="mt-2 text-sm text-slate-400">Cap sessió registrada aquest dia.</p>}<div className="mt-3 grid grid-cols-[1fr_100px] gap-2"><select value={manualType} onChange={e=>setManualType(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3">{MANUAL_TYPES.map(type=><option key={type} value={type}>{typeLabel(type)}</option>)}</select><input value={manualMinutes} onChange={e=>setManualMinutes(e.target.value)} inputMode="numeric" placeholder="min" className="min-h-[48px] rounded-xl border border-slate-300 px-3"/></div><button type="button" disabled={calendarBusy} onClick={addManualSession} className="mt-2 min-h-[48px] w-full rounded-xl bg-slate-900 font-extrabold text-white">＋ Afegir sessió a aquest dia</button></div><p className="mt-4 text-center text-xs text-slate-400">Pots corregir dies passats, afegir sessions que vas oblidar i treure qualsevol marca o sessió des d'aquí.</p></section></div>}
+ </>;
 }
