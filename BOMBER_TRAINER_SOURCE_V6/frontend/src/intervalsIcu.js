@@ -1,5 +1,5 @@
 // Intervals.icu client + sincronització.
-// FIX 2026-08-21: strict metrics + deterministic matching/dedup.
+// FIX 2026-08-21: strict metrics + deterministic matching/dedup + resilient deletion.
 const KEY_STORAGE = 'bt_intervals_icu_api_key';
 export function getIntervalsApiKey() { return localStorage.getItem(KEY_STORAGE) || ''; }
 export function setIntervalsApiKey(value) { const key = String(value || '').trim(); if (key) localStorage.setItem(KEY_STORAGE, key); else localStorage.removeItem(KEY_STORAGE); }
@@ -43,6 +43,19 @@ export async function syncRecentIntervalsActivities({pb,owner,days=3650,typeReso
   for(const activity of activities){try{const date=activityDateKey(activity);if(!date){skipped+=1;continue;}const id=activityIdKey(activity);const start=activityStartKey(activity);const name=activityNameKey(activity);const type=activityTypeKey(activity);let existingRecord=id?byId.get(id):null;if(existingRecord&&consumed.has(existingRecord.row.id))existingRecord=null;const candidates=(rowsByDate.get(date)||[]).filter(r=>!consumed.has(r.row.id));if(!existingRecord)existingRecord=candidates.find(r=>wearableStartKey(r.wearable,r.row?.date)===start&&wearableNameKey(r.wearable)===name&&wearableTypeKey(r.wearable)===type)||null;if(!existingRecord&&start)existingRecord=candidates.find(r=>wearableStartKey(r.wearable,r.row?.date)===start&&wearableTypeKey(r.wearable)===type)||null;if(!existingRecord){const matches=candidates.filter(r=>wearableNameKey(r.wearable)===name&&wearableTypeKey(r.wearable)===type);if(matches.length===1)existingRecord=matches[0];}const suggestedType=typeResolver?.(activity)||null;if(existingRecord){consumed.add(existingRecord.row.id);const wearable=buildWearable(activity,existingRecord.wearable);if(id)byId.set(id,{row:existingRecord.row,wearable,sourced:true});const patch={date,wearable};if(wearable.durationSeconds)patch.duration=Math.round((wearable.durationSeconds/60)*10)/10;if(suggestedType&&existingRecord.row.type==='manteniment')patch.type=suggestedType;await pb.collection('bt_sessions').update(existingRecord.row.id,patch);updated+=1;continue;}const wearable=buildWearable(activity);const created=await pb.collection('bt_sessions').create({type:suggestedType||'manteniment',date,duration:wearable.durationSeconds?Math.round((wearable.durationSeconds/60)*10)/10:0,points:0,notes:'Activitat sincronitzada des d’Intervals.icu · pendent d’associar',data:[],wearable,owner});const record={row:created,wearable,sourced:true};consumed.add(created.id);if(id)byId.set(id,record);const list=rowsByDate.get(date)||[];list.push(record);rowsByDate.set(date,list);imported+=1;}catch(error){skipped+=1;console.warn('[intervalsIcu] skip',activity?.id,error?.message||error);}}
   return{imported,updated,existing:updated,skipped,total:activities.length,failedRanges:result.failedRanges};}
 
-function isLegacyIntervalsRow(row){const wearable=parseWearable(row?.wearable);const source=String(wearable?.source||'').toLowerCase();const activityId=String(wearable?.activityId||'').trim();const notes=String(row?.notes||'').toLowerCase();return source==='intervals.icu'||Boolean(activityId)||notes.includes('intervals.icu')||notes.includes('intervals.icu');}
-export async function deleteAllIntervalsActivities({pb,owner,onProgress}){const rows=await pb.collection('bt_sessions').getFullList({filter:`owner = \"${owner}\"`});const imported=rows.filter(isLegacyIntervalsRow);for(let i=0;i<imported.length;i+=1){onProgress?.(`Esborrant activitats sincronitzades… ${i+1}/${imported.length}`);await pb.collection('bt_sessions').delete(imported[i].id);}return imported.length;}
+function isLegacyIntervalsRow(row){const wearable=parseWearable(row?.wearable);const source=String(wearable?.source||'').toLowerCase();const activityId=String(wearable?.activityId||'').trim();const notes=String(row?.notes||'').toLowerCase();return source==='intervals.icu'||Boolean(activityId)||notes.includes('intervals.icu');}
+export async function deleteAllIntervalsActivities({pb,owner,onProgress}){
+  const rows=await pb.collection('bt_sessions').getFullList({filter:`owner = \"${owner}\"`});
+  const imported=rows.filter(isLegacyIntervalsRow);
+  let deleted=0; let failed=0;
+  for(let i=0;i<imported.length;i+=1){
+    onProgress?.(`Esborrant activitats sincronitzades… ${i+1}/${imported.length}`);
+    let lastError=null; let done=false;
+    for(let attempt=0;attempt<3;attempt+=1){
+      try{await pb.collection('bt_sessions').delete(imported[i].id);deleted+=1;done=true;break;}catch(error){lastError=error;const status=Number(error?.status||error?.response?.code||0);if(status===401||status===403)throw error;if(attempt<2)await sleep(350*(attempt+1));}}
+    if(!done){failed+=1;console.warn('[intervalsIcu] no s’ha pogut esborrar',imported[i]?.id,lastError?.message||lastError);}
+  }
+  if(failed>0) throw new Error(`S’han esborrat ${deleted} activitats, però ${failed} no s’han pogut eliminar. Torna-ho a provar.`);
+  return deleted;
+}
 export const __test__={buildWearable,extractDurationSeconds,extractDistanceMeters};
