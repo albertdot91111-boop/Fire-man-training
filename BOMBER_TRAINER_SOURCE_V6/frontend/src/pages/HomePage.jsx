@@ -24,31 +24,56 @@ function benchProgress(sessions) {
     return Math.round(Math.max(0, Math.min(100, Math.min((best.weight / 65) * 100, best.reps ? (best.reps / 20) * 100 : (best.weight / 65) * 100))));
 }
 
-// Percentatge de preparació visible a Inici. No depèn de l'IA: llegeix també
-// sessions antigues/manuals on el tipus o la durada poden arribar en formats diferents.
+const STRUCTURAL_EXERCISES = [
+    '1. Discos (transport)',
+    '2. Kettlebells',
+    '3. Trineu',
+    '4. Recorregut en C',
+    '5. Arrossegament de maniquí',
+    '6. Esprint final',
+];
+
+function parseProgressSeconds(value) {
+    if (typeof value === 'number') return value > 0 ? value : 0;
+    const text = String(value ?? '').trim();
+    if (!text) return 0;
+    if (text.includes(':')) {
+        const [m, s = '0'] = text.split(':');
+        const mm = Number(m); const ss = Number(s);
+        return Number.isFinite(mm) && Number.isFinite(ss) ? mm * 60 + ss : 0;
+    }
+    if (/^\d+\s*,\s*\d{1,2}$/.test(text)) {
+        const [m, s] = text.split(',').map((part) => Number(part.trim()));
+        return Number.isFinite(m) && Number.isFinite(s) && s < 60 ? m * 60 + s : 0;
+    }
+    const n = Number(text);
+    return Number.isFinite(n) && n > 0 ? n * 60 : 0;
+}
+
+function isCompleteStructuralSession(session) {
+    if (String(session?.type || '').trim().toLowerCase() !== 'estructural') return false;
+    const data = Array.isArray(session?.data) ? session.data : [];
+    return STRUCTURAL_EXERCISES.every((name) => {
+        const entry = data.find((e) => String(e?.exercici || '').trim().toLowerCase() === name.toLowerCase());
+        return parseProgressSeconds(entry?.temps) > 0;
+    });
+}
+
+// El % d'ESTRUCTURAL només representa una ruta completa: els 6 exercicis.
+// Una sessió parcial continua guardada i disponible per a les gràfiques, però
+// no contamina el percentatge de preparació.
 function physicalProgress(sessions, type) {
     const targets = { estructural: 130, forestal: 190 };
     const target = targets[type];
     if (!target) return null;
     const rows = sessions
         .filter((s) => String(s?.type || '').trim().toLowerCase() === type)
+        .filter((s) => type !== 'estructural' || isCompleteStructuralSession(s))
         .map((s) => {
             let seconds = Number(s?.duration) > 0 ? Number(s.duration) * 60 : 0;
-            if (!seconds) {
+            if (!seconds || type === 'estructural') {
                 const data = Array.isArray(s?.data) ? s.data : [];
-                seconds = data.map((e) => {
-                    const value = e?.temps;
-                    if (typeof value === 'number') return value > 0 ? value : 0;
-                    const text = String(value ?? '').trim();
-                    if (!text) return 0;
-                    if (text.includes(':')) {
-                        const [m, sec = '0'] = text.split(':');
-                        const mm = Number(m); const ss = Number(sec);
-                        return Number.isFinite(mm) && Number.isFinite(ss) ? mm * 60 + ss : 0;
-                    }
-                    const n = Number(text);
-                    return Number.isFinite(n) && n > 0 ? n * 60 : 0;
-                }).reduce((sum, value) => sum + value, 0);
+                seconds = data.map((e) => parseProgressSeconds(e?.temps)).reduce((sum, value) => sum + value, 0);
             }
             const penalties = Number(s?.penalties) || 0;
             return seconds > 0 ? seconds + (type === 'estructural' ? penalties * 5 : penalties * 10) : 0;
@@ -97,11 +122,10 @@ export default function HomePage() {
     const progressByType = useMemo(() => {
         const map = {};
         diagnosis.tests.forEach((test) => { map[test.type] = test.readiness?.progress ?? null; });
-        // Fallback robust: structural/forestals visibles fins i tot si una sessió
-        // antiga no és compatible amb el format que usa el motor d'IA.
         ['estructural', 'forestal'].forEach((type) => {
             const direct = physicalProgress(sessions, type);
             if (direct !== null) map[type] = direct;
+            else if (type === 'estructural') map[type] = null;
         });
         map.pressbanca = benchProgress(sessions);
         return map;
