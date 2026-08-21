@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Create ZIP
         run: |
-          zip -r Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip . -x '.git/*'
+          zip -r Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip . -x '.git/*' 'Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip'
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
