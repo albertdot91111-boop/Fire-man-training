@@ -1,5 +1,4 @@
 export const TYPES = {
-    pit: { key: 'pit', label: 'Pit / Tren superior', short: 'PIT', color: '#2563eb', soft: '#dbeafe', emoji: '' },
     cames: { key: 'cames', label: 'Cames', short: 'CAMES', color: '#16a34a', soft: '#dcfce7' },
     estructural: { key: 'estructural', label: 'Incendi estructural', short: 'ESTRUCTURAL', color: '#dc2626', soft: '#fee2e2' },
     forestal: { key: 'forestal', label: 'Incendi forestal', short: 'FORESTAL', color: '#ea580c', soft: '#ffedd5' },
@@ -16,13 +15,6 @@ export const MATERIAL = [
 ];
 
 export const PLANS = {
-    pit: [
-        { name: 'Press banca', detail: '5 sèries', fields: ['pes', 'reps'] },
-        { name: 'Press inclinat amb manuelles', detail: '4 sèries', fields: ['pes', 'reps'] },
-        { name: 'Dominades', detail: '4 sèries', fields: ['reps'] },
-        { name: 'Rem amb barra', detail: '4 sèries', fields: ['pes', 'reps'] },
-        { name: 'Fons / Press militar', detail: '3 sèries', fields: ['pes', 'reps'] },
-    ],
     cames: [
         { name: 'Sentadilla', detail: '5 sèries', fields: ['pes', 'reps'] },
         { name: 'Pes mort', detail: '4 sèries', fields: ['pes', 'reps'] },
@@ -69,16 +61,17 @@ export const PLANS = {
 };
 
 export const INCIDENTS = ['Caiguda', 'Fatiga', 'Dolor', 'Material insuficient', 'Falta de temps', 'Calor'];
-
 export const POINTS = { complet: 100, manteniment: 40, minim: 20 };
 
-// Barem PROVISIONAL estimat a partir de les dades que tenim ara.
-// NO és el barem oficial: forestal 10 ≈ 3:10 i urbà/estructural 10 ≈ 2:10.
-// L'aquàtica no té encara un barem numèric fixat al projecte.
+// Barem PROVISIONAL propi de Bomber Trainer. Es substituirà quan surtin les bases.
+// Temps: com menys temps, millor. 10 = objectiu acordat.
 export const PHYSICAL_BAREMS = {
-    forestal: { 5: 240, 6: 225, 7: 215, 8: 205, 9: 195, 10: 190 },
-    estructural: { 5: 180, 6: 165, 7: 155, 8: 145, 9: 135, 10: 130 },
+    forestal: { 0: 280, 1: 270, 2: 260, 3: 250, 4: 240, 5: 230, 6: 220, 7: 210, 8: 205, 9: 200, 10: 190 },
+    estructural: { 0: 230, 1: 220, 2: 210, 3: 200, 4: 190, 5: 180, 6: 170, 7: 160, 8: 150, 9: 140, 10: 130 },
+    aquatic: { 0: 280, 1: 270, 2: 260, 3: 250, 4: 240, 5: 230, 6: 220, 7: 210, 8: 205, 9: 200, 10: 190 },
 };
+
+export const PRESS_BENCH_BAREM = { 0: 0, 1: 5, 2: 7, 3: 9, 4: 11, 5: 13, 6: 14, 7: 15, 8: 16, 9: 18, 10: 20 };
 
 export function formatTime(totalSeconds) {
     const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
@@ -97,7 +90,10 @@ export function parseTime(value) {
         const seconds = Number(s);
         return Number.isFinite(minutes) && Number.isFinite(seconds) ? (minutes * 60) + seconds : 0;
     }
-    // Els camps de temps de l'app són en minuts. Per posar segons, usa min:s.
+    if (/^\d+\s*,\s*\d{1,2}$/.test(text)) {
+        const [m, s] = text.split(',').map((part) => Number(part.trim()));
+        return Number.isFinite(m) && Number.isFinite(s) && s >= 0 && s < 60 ? (m * 60) + s : 0;
+    }
     const minutes = Number(text);
     return Number.isFinite(minutes) ? minutes * 60 : 0;
 }
@@ -107,8 +103,8 @@ export function gradeForTime(type, totalSeconds) {
     const time = Number(totalSeconds);
     if (!barem || !Number.isFinite(time) || time <= 0) return null;
     const grades = Object.keys(barem).map(Number).sort((a, b) => a - b);
-    if (time <= barem[grades[grades.length - 1]]) return 10;
-    if (time >= barem[grades[0]]) return grades[0];
+    if (time <= barem[10]) return 10;
+    if (time >= barem[0]) return 0;
     for (let i = 0; i < grades.length - 1; i += 1) {
         const lowGrade = grades[i];
         const highGrade = grades[i + 1];
@@ -119,7 +115,26 @@ export function gradeForTime(type, totalSeconds) {
             return Math.round((lowGrade + ratio * (highGrade - lowGrade)) * 10) / 10;
         }
     }
-    return grades[0];
+    return 0;
+}
+
+export function gradeForBench(weight, reps) {
+    const kg = Number(weight) || 0;
+    const repetitions = Number(reps) || 0;
+    if (kg <= 0 || repetitions <= 0) return null;
+    const repGrades = Object.keys(PRESS_BENCH_BAREM).map(Number).sort((a, b) => a - b);
+    const repScore = repetitions >= 20 ? 10 : repetitions <= 0 ? 0 : (() => {
+        for (let i = 0; i < repGrades.length - 1; i += 1) {
+            const lo = repGrades[i]; const hi = repGrades[i + 1];
+            if (repetitions >= PRESS_BENCH_BAREM[lo] && repetitions <= PRESS_BENCH_BAREM[hi]) {
+                const span = PRESS_BENCH_BAREM[hi] - PRESS_BENCH_BAREM[lo];
+                return span <= 0 ? lo : lo + ((repetitions - PRESS_BENCH_BAREM[lo]) / span) * (hi - lo);
+            }
+        }
+        return 0;
+    })();
+    const weightScore = Math.max(0, Math.min(10, (kg / 65) * 10));
+    return Math.round(Math.min(repScore, weightScore) * 10) / 10;
 }
 
 export const LEVELS = [
@@ -130,11 +145,8 @@ export const LEVELS = [
 ];
 
 export const levelFor = (points) => LEVELS.reduce((acc, l) => (points >= l.min ? l : acc), LEVELS[0]);
-
 export const nextLevel = (points) => LEVELS.find((l) => l.min > points) || null;
-
 export const today = () => new Date().toISOString().slice(0, 10);
-
 export const dayDiff = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 
 export function totalPoints(sessions) {
@@ -143,39 +155,23 @@ export function totalPoints(sessions) {
 
 export function parseSeries(value) {
     if (Array.isArray(value)) return value.map(Number).filter(Number.isFinite);
-    return String(value ?? '')
-        .split(/[\/,\s]+/)
-        .map(Number)
-        .filter(Number.isFinite);
+    return String(value ?? '').split(/[\/,\s]+/).map(Number).filter(Number.isFinite);
 }
 
 export function maintenanceEvolution(sessions) {
-    return sessions
-        .filter((s) => s.type === 'manteniment')
-        .flatMap((s) => {
-            const data = Array.isArray(s.data) ? s.data : [];
-            const exerciseEntries = data
-                .filter((item) => item.exercici && item.exercici !== 'Bloc de manteniment')
-                .map((item) => ({ exercici: item.exercici, values: parseSeries(item.series ?? item.reps ?? item.temps) }))
-                .filter((item) => item.values.length);
-
-            if (exerciseEntries.length) {
-                const values = exerciseEntries.flatMap((item) => item.values);
-                return [{
-                    date: s.date,
-                    values,
-                    total: values.reduce((sum, value) => sum + value, 0),
-                    entries: exerciseEntries,
-                }];
-            }
-
-            const legacyEntry = data.find((item) => item.exercici === 'Bloc de manteniment');
-            const legacyValues = parseSeries(legacyEntry?.series ?? legacyEntry?.temps);
-            return legacyValues.length
-                ? [{ date: s.date, values: legacyValues, total: legacyValues.reduce((sum, value) => sum + value, 0), entries: [{ exercici: 'Manteniment', values: legacyValues }] }]
-                : [];
-        })
-        .sort((a, b) => a.date.localeCompare(b.date));
+    return sessions.filter((s) => s.type === 'manteniment').flatMap((s) => {
+        const data = Array.isArray(s.data) ? s.data : [];
+        const exerciseEntries = data.filter((item) => item.exercici && item.exercici !== 'Bloc de manteniment')
+            .map((item) => ({ exercici: item.exercici, values: parseSeries(item.series ?? item.reps ?? item.temps) }))
+            .filter((item) => item.values.length);
+        if (exerciseEntries.length) {
+            const values = exerciseEntries.flatMap((item) => item.values);
+            return [{ date: s.date, values, total: values.reduce((sum, value) => sum + value, 0), entries: exerciseEntries }];
+        }
+        const legacyEntry = data.find((item) => item.exercici === 'Bloc de manteniment');
+        const legacyValues = parseSeries(legacyEntry?.series ?? legacyEntry?.temps);
+        return legacyValues.length ? [{ date: s.date, values: legacyValues, total: legacyValues.reduce((sum, value) => sum + value, 0), entries: [{ exercici: 'Manteniment', values: legacyValues }] }] : [];
+    }).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export function streak(sessions) {
@@ -186,8 +182,8 @@ export function streak(sessions) {
     for (let i = 0; i < 400; i += 1) {
         const key = cursor.toISOString().slice(0, 10);
         if (days.has(key)) count += 1;
-        else if (rest.has(key) || (i === 0 && !days.has(key))) {
-        } else break;
+        else if (rest.has(key) || (i === 0 && !days.has(key))) { }
+        else break;
         cursor.setDate(cursor.getDate() - 1);
     }
     return count;
@@ -199,10 +195,8 @@ export function daysSince(sessions, type) {
 }
 
 export function weakPoints(sessions) {
-    return ['pit', 'cames', 'estructural', 'forestal', 'aquatic']
-        .map((t) => ({ type: t, days: daysSince(sessions, t) }))
-        .filter((x) => x.days === null || x.days >= 7)
-        .sort((a, b) => (b.days ?? 999) - (a.days ?? 999));
+    return ['cames', 'estructural', 'forestal', 'aquatic'].map((t) => ({ type: t, days: daysSince(sessions, t) }))
+        .filter((x) => x.days === null || x.days >= 7).sort((a, b) => (b.days ?? 999) - (a.days ?? 999));
 }
 
 export const MOTIVATION = [
@@ -213,14 +207,11 @@ export const MOTIVATION = [
 ];
 
 export function buildUserContext({ sessions, weights, goals, material, minutes }) {
-    const recent = sessions.slice(0, 25).map((s) => ({
-        data: s.date, tipus: s.type, minuts: s.duration, punts: s.points,
-        incidencies: s.incidents, registre: s.data,
-    }));
+    const recent = sessions.slice(0, 25).map((s) => ({ data: s.date, tipus: s.type, minuts: s.duration, punts: s.points, incidencies: s.incidents, registre: s.data }));
     return [
         '[DADES DE L\'USUARI]',
         `Ratxa: ${streak(sessions)} dies. Punts totals: ${totalPoints(sessions)}. Nivell: ${levelFor(totalPoints(sessions)).name}.`,
-        `Dies sense treballar: ${['pit', 'cames', 'estructural', 'forestal', 'aquatic', 'manteniment'].map((t) => `${TYPES[t].short}=${daysSince(sessions, t) ?? 'mai'}`).join(', ')}.`,
+        `Dies sense treballar: ${['cames', 'estructural', 'forestal', 'aquatic', 'manteniment'].map((t) => `${TYPES[t].short}=${daysSince(sessions, t) ?? 'mai'}`).join(', ')}.`,
         `Material disponible: ${(material && material.length ? material : ['cap indicat']).join(', ')}.`,
         `Objectius: ${goals.length ? goals.map((g) => `${g.title} (${g.current || 0}/${g.target || 0} ${g.unit || ''})`).join('; ') : 'cap'}.`,
         `Pes corporal recent: ${weights.slice(0, 5).map((w) => `${w.date}:${w.weight}kg`).join(', ') || 'sense registres'}.`,
