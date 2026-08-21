@@ -4,14 +4,13 @@ import Pocketbase from 'pocketbase';
 const POCKETBASE_API_URL = 'https://r16tt07qxqir1ks.ba7w.pocketbasecloud.com';
 const pocketbaseClient = new Pocketbase(POCKETBASE_API_URL);
 
-// Avoid duplicate reads caused by page/auth re-renders. A short read cache
-// also keeps the UI usable when PocketBase Cloud temporarily answers 429.
+// Avoid duplicate reads caused by page/auth re-renders. Keep stale successful
+// values available during a temporary 429 so the app remains usable.
 const READ_CACHE_MS = 60_000;
 const readCache = new Map();
 const inFlightReads = new Map();
 const OPTIONAL_COLLECTIONS = new Set(['bt_weights', 'bt_goals']);
 const WRITE_METHODS = new Set(['create', 'update', 'upsert', 'delete']);
-
 const cacheKey = (name, args) => `${pocketbaseClient.authStore.record?.id || 'guest'}|${name}|${JSON.stringify(args || [])}`;
 export const clearRequestCache = () => readCache.clear();
 
@@ -43,12 +42,15 @@ pocketbaseClient.collection = (name) => {
                         return value;
                     } catch (error) {
                         const status = Number(error?.status || error?.response?.code || 0);
-                        // Never hammer a rate-limited API with automatic retries.
-                        // If we have a recent result, keep showing that result.
+                        // A rate limit must never cause a request storm. If this
+                        // exact query was loaded before, serve the stale result.
                         if (status === 429 && cached) return cached.value;
-                        if (status === 404 && OPTIONAL_COLLECTIONS.has(name)) {
+                        // Optional panels (weight/objectives) must not break the
+                        // whole Progress screen when their collection is absent
+                        // or temporarily rate-limited.
+                        if ((status === 404 || status === 429) && OPTIONAL_COLLECTIONS.has(name)) {
                             const message = error?.response?.message || error?.message || '';
-                            if (/missing (or invalid )?collection context/i.test(message)) return [];
+                            if (status === 429 || /missing (or invalid )?collection context/i.test(message)) return [];
                         }
                         throw error;
                     } finally {
