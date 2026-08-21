@@ -1,0 +1,27 @@
+name: Export source ZIP
+
+on:
+  push:
+    branches:
+      - version-no-funciona-2026-08-21
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Create ZIP outside source tree
+        run: |
+          rm -f /tmp/Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip
+          cd "$GITHUB_WORKSPACE"
+          zip -r /tmp/Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip . -x './.git/*'
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21
+          path: /tmp/Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip
+          retention-days: 30
