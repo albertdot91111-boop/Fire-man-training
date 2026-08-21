@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import pb from '@/lib/pocketbaseClient';
 
 const AuthContext = createContext(null);
+const AUTH_REFRESH_KEY = 'bt:last-auth-refresh';
+const AUTH_REFRESH_MS = 20 * 60 * 1000;
 
 const isDefinitiveAuthFailure = (error) => {
   const status = Number(error?.status || error?.response?.code || 0);
@@ -29,21 +31,31 @@ export const AuthProvider = ({ children }) => {
     setIsLoadingAuth(true);
     try {
       if (pb.authStore.isValid) {
-        // A temporary PocketBase/network error must NOT log the user out.
-        // Only a definitive 401/403 means that the persisted token is invalid.
-        try {
-          await pb.collection('users').authRefresh();
-          setUser(pb.authStore.record);
-          setIsAuthenticated(true);
-        } catch (error) {
-          if (isDefinitiveAuthFailure(error)) {
-            pb.authStore.clear();
-            setUser(null);
-            setIsAuthenticated(false);
-          } else {
-            setUser(pb.authStore.record || null);
-            setIsAuthenticated(Boolean(pb.authStore.isValid));
+        const lastRefresh = Number(localStorage.getItem(AUTH_REFRESH_KEY) || 0);
+        const shouldRefresh = !lastRefresh || Date.now() - lastRefresh > AUTH_REFRESH_MS;
+
+        if (shouldRefresh) {
+          try {
+            await pb.collection('users').authRefresh();
+            localStorage.setItem(AUTH_REFRESH_KEY, String(Date.now()));
+            setUser(pb.authStore.record);
+            setIsAuthenticated(true);
+          } catch (error) {
+            // A 429/network/server error must never log the user out. Keep the
+            // persisted token and let normal record requests continue.
+            if (isDefinitiveAuthFailure(error)) {
+              pb.authStore.clear();
+              localStorage.removeItem(AUTH_REFRESH_KEY);
+              setUser(null);
+              setIsAuthenticated(false);
+            } else {
+              setUser(pb.authStore.record || null);
+              setIsAuthenticated(Boolean(pb.authStore.isValid));
+            }
           }
+        } else {
+          setUser(pb.authStore.record || null);
+          setIsAuthenticated(Boolean(pb.authStore.isValid));
         }
       } else {
         setUser(null);
@@ -64,6 +76,7 @@ export const AuthProvider = ({ children }) => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         await pb.collection('users').authWithPassword(email, password);
+        localStorage.setItem(AUTH_REFRESH_KEY, String(Date.now()));
         setUser(pb.authStore.record);
         setIsAuthenticated(true);
         setAuthChecked(true);
@@ -71,8 +84,7 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         lastError = error;
         const status = Number(error?.status || error?.response?.code || 0);
-        // Retry transient/network/server failures once, but do not retry bad credentials.
-        if (status === 400 || status === 401 || status === 403) break;
+        if (status === 400 || status === 401 || status === 403 || status === 429) break;
         if (attempt === 0) await wait(700);
       }
     }
@@ -82,6 +94,7 @@ export const AuthProvider = ({ children }) => {
   const signup = useCallback(async (email, password) => {
     await pb.collection('users').create({ email, password, passwordConfirm: password });
     await pb.collection('users').authWithPassword(email, password);
+    localStorage.setItem(AUTH_REFRESH_KEY, String(Date.now()));
     setUser(pb.authStore.record);
     setIsAuthenticated(true);
     setAuthChecked(true);
@@ -89,6 +102,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(() => {
     pb.authStore.clear();
+    localStorage.removeItem(AUTH_REFRESH_KEY);
     setUser(null);
     setIsAuthenticated(false);
   }, []);
@@ -98,23 +112,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated,
-        isAuthed: isAuthenticated,
-        isLoadingAuth,
-        isLoadingPublicSettings: false,
-        authError,
-        authChecked,
-        login,
-        signup,
-        logout,
-        navigateToLogin,
-        checkUserAuth,
-        checkAppState: checkUserAuth,
-      }}
-    >
+    <AuthContext.Provider value={{ user, isAuthenticated, isAuthed: isAuthenticated, isLoadingAuth, isLoadingPublicSettings: false, authError, authChecked, login, signup, logout, navigateToLogin, checkUserAuth, checkAppState: checkUserAuth }}>
       {children}
     </AuthContext.Provider>
   );
@@ -122,9 +120,7 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
 
