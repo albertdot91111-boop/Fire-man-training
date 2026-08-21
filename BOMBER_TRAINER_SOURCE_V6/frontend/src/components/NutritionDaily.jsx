@@ -59,6 +59,7 @@ export default function NutritionDaily(){
         const base=new Date(now.getFullYear(),now.getMonth(),1);
         buttons.forEach(button=>{
           button.querySelectorAll('[data-bt-nutrition-marker]').forEach(marker=>marker.remove());
+          button.style.boxShadow='';
           const spans=Array.from(button.querySelectorAll(':scope > span'));
           const daySpan=spans.find(span=>/^\d{1,2}$/.test(span.textContent?.trim()||''));
           const day=Number(daySpan?.textContent?.trim()||'');
@@ -66,13 +67,10 @@ export default function NutritionDaily(){
           const key=dateKey(new Date(base.getFullYear(),base.getMonth(),day));
           const markerStatus=readNutritionStatus(owner,key);
           if(!markerStatus)return;
-          button.style.position='relative';
-          const marker=document.createElement('span');
-          marker.dataset.btNutritionMarker='1';
-          marker.title=markerStatus==='free_meal'?'Àpat lliure de la setmana':markerStatus==='good'?'Nutrició correcta':'Nutrició a millorar';
-          marker.textContent=markerStatus==='free_meal'?'🍕':markerStatus==='good'?'✓':'×';
-          marker.style.cssText=`position:absolute;right:4px;bottom:3px;width:19px;height:19px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:white;background:${markerStatus==='good'||markerStatus==='free_meal'?'#16a34a':'#dc2626'};box-shadow:0 1px 3px rgba(0,0,0,.18);z-index:20;pointer-events:none;`;
-          button.appendChild(marker);
+          const outline=markerStatus==='bad'?'#dc2626':'#16a34a';
+          button.style.boxShadow=`inset 0 0 0 3px ${outline}`;
+          button.style.borderRadius='0.75rem';
+          button.title=markerStatus==='free_meal'?'Àpat lliure de la setmana':markerStatus==='good'?'Nutrició correcta':'Nutrició a millorar';
         });
       }finally{
         window.setTimeout(()=>{decorateBusy.current=false;},0);
