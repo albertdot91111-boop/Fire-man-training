@@ -16,6 +16,18 @@ function readPersonalDay(date) {
   }
 }
 
+function addPercentToGrades() {
+  const nodes = [...document.querySelectorAll('p')].filter((el) => /Nota(?: aprox\.)?\s+\d+(?:\.\d+)?(?:\s|$)/i.test(el.textContent || '') && !el.dataset.btGradePercent);
+  nodes.forEach((el) => {
+    const match = (el.textContent || '').match(/Nota(?: aprox\.)?\s+(\d+(?:\.\d+)?)/i);
+    if (!match) return;
+    const grade = Number(match[1]);
+    if (!Number.isFinite(grade) || grade < 0 || grade > 10) return;
+    el.textContent = `${el.textContent} · ${Math.round(grade * 10)}%`;
+    el.dataset.btGradePercent = 'true';
+  });
+}
+
 export default function ProgressVisualFixes() {
   const location = useLocation();
   useEffect(() => {
@@ -55,25 +67,15 @@ export default function ProgressVisualFixes() {
             let markerLabel = '';
             let outline = '';
             if (nutrition === 'free_meal' || nutrition === 'out') {
-              markerText = '🍕';
-              markerLabel = 'Àpat fora';
-              outline = '#f59e0b';
+              markerText = '🍕'; markerLabel = 'Àpat fora'; outline = '#f59e0b';
             } else if (nutrition === 'good') {
-              markerText = '✓';
-              markerLabel = 'Nutrició correcta';
-              outline = '#16a34a';
+              markerText = '✓'; markerLabel = 'Nutrició correcta'; outline = '#16a34a';
             } else if (nutrition === 'bad') {
-              markerText = '×';
-              markerLabel = 'Nutrició a millorar';
-              outline = '#dc2626';
+              markerText = '×'; markerLabel = 'Nutrició a millorar'; outline = '#dc2626';
             } else if (trained === true) {
-              markerText = '✓';
-              markerLabel = 'Entrenament registrat';
-              outline = '#16a34a';
+              markerText = '✓'; markerLabel = 'Entrenament registrat'; outline = '#16a34a';
             } else if (trained === false) {
-              markerText = '×';
-              markerLabel = 'No entrenat';
-              outline = '#dc2626';
+              markerText = '×'; markerLabel = 'No entrenat'; outline = '#dc2626';
             }
 
             if (!markerText) return;
@@ -98,6 +100,9 @@ export default function ProgressVisualFixes() {
             if (text === 'PIT' || text === 'Pit' || text === 'Pit / Tren superior') el.textContent = 'Press banca';
           });
         }
+
+        // Physical-test scores are 0–10 in the data model; expose the same value as 0–100%.
+        addPercentToGrades();
       }, 50);
     };
     const observer = new MutationObserver(refresh);
