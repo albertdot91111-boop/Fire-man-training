@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import NutritionDaily from '@/components/NutritionDaily';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import TrainPage from './pages/TrainPage';
@@ -37,23 +38,26 @@ const AuthenticatedApp = () => {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/oauth/callback" element={<OAuthCallback />} />
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/entrena/:type" element={<TrainPage />} />
-        <Route path="/progres" element={<ProgressPage />} />
-        <Route path="/perfil" element={<ProfilePage />} />
-        <Route path="/ia" element={<AiPage />} />
-        <Route path="/activitats" element={<ActivitiesPage />} />
-        <Route path="/configuracio" element={<SettingsPage />} />
-      </Route>
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/oauth/callback" element={<OAuthCallback />} />
+        <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/entrena/:type" element={<TrainPage />} />
+          <Route path="/progres" element={<ProgressPage />} />
+          <Route path="/perfil" element={<ProfilePage />} />
+          <Route path="/ia" element={<AiPage />} />
+          <Route path="/activitats" element={<ActivitiesPage />} />
+          <Route path="/configuracio" element={<SettingsPage />} />
+        </Route>
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+      <NutritionDaily />
+    </>
   );
 };
 
