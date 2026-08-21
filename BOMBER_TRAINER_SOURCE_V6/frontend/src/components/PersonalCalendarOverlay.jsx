@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import pb from '@/lib/pocketbaseClient';
 
 const STORAGE_KEY = 'bomber-trainer-personal-calendar-v1';
 
@@ -12,12 +13,31 @@ function readCalendar() {
     }
 }
 
+function writeNutritionCompatibility(dateKey, nutrition) {
+    // Keep the existing NutritionDaily calendar markers in sync with the
+    // personal calendar so a saved entry is immediately visible everywhere.
+    try {
+        const owner = pb.authStore.record?.id || 'guest';
+        const key = `bt_nutrition_${owner}_${dateKey}`;
+        if (nutrition === 'good' || nutrition === 'bad' || nutrition === 'free_meal' || nutrition === 'out') {
+            localStorage.setItem(key, nutrition === 'out' ? 'free_meal' : nutrition);
+        } else {
+            localStorage.removeItem(key);
+        }
+    } catch {
+        // The primary calendar save below is still authoritative.
+    }
+}
+
 function writeCalendar(data) {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        const serialized = JSON.stringify(data);
+        localStorage.setItem(STORAGE_KEY, serialized);
         const check = localStorage.getItem(STORAGE_KEY);
-        if (check !== JSON.stringify(data)) return false;
+        if (check !== serialized) return false;
         window.dispatchEvent(new CustomEvent('bt-personal-calendar-change'));
+        window.dispatchEvent(new CustomEvent('bt:nutrition-updated'));
+        window.dispatchEvent(new CustomEvent('bt:progress-updated'));
         return true;
     } catch {
         return false;
@@ -50,9 +70,11 @@ export default function PersonalCalendarOverlay() {
         const onChange = () => setCalendar(readCalendar());
         window.addEventListener('storage', onChange);
         window.addEventListener('bt-personal-calendar-change', onChange);
+        window.addEventListener('bt:progress-updated', onChange);
         return () => {
             window.removeEventListener('storage', onChange);
             window.removeEventListener('bt-personal-calendar-change', onChange);
+            window.removeEventListener('bt:progress-updated', onChange);
         };
     }, []);
 
@@ -108,6 +130,11 @@ export default function PersonalCalendarOverlay() {
             };
         }
 
+        // Write the nutrition mirror before closing the dialog. This fixes the
+        // previous split-storage bug where the form saved but the calendar
+        // marker still read a different key.
+        writeNutritionCompatibility(dateKey, nutrition);
+
         const ok = writeCalendar(next);
         if (!ok) {
             setSaved(false);
@@ -125,6 +152,7 @@ export default function PersonalCalendarOverlay() {
         if (!dateKey) return;
         const next = { ...readCalendar() };
         delete next[dateKey];
+        writeNutritionCompatibility(dateKey, null);
         const ok = writeCalendar(next);
         if (!ok) {
             showToast('No s’han pogut eliminar les dades.');
@@ -181,7 +209,7 @@ export default function PersonalCalendarOverlay() {
 
                         <div className="mt-4 grid grid-cols-2 gap-2">
                             <button type="button" onClick={remove} className="min-h-12 rounded-xl border border-red-200 bg-red-50 font-bold text-red-700">Eliminar dades</button>
-                            <button type="button" onClick={save} className="min-h-12 rounded-xl bg-slate-900 font-bold text-white">Guardar dia</button>
+                            <button type="button" onClick={save} className="min-h-12 rounded-xl bg-slate-900 font-bold text-white">✓ Guardar dia</button>
                         </div>
 
                         <div className="mt-5 border-t border-slate-100 pt-4">
