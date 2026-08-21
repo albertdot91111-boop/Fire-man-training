@@ -1,3 +1,21 @@
+// Intervals.icu client + sincronització.
+//
+// FIX 2026-08-21 — problema real detectat:
+// 1. `buildWearable` acceptava un `activity?.duration` genèric i un fallback
+//    `existingWearable?.durationSeconds` que preservava valors incorrectes de
+//    sincronitzacions antigues. Això generava temps "inventats" de 4:00 o 5:00
+//    (que en realitat provenien d'anteriors bugs guardats a la base de dades).
+// 2. La deduplicació ignorava qualsevol row existent que no tingués
+//    `wearable.source === 'intervals.icu'`. Això feia que sessions manuals o
+//    Suunto del mateix dia no s'associessin amb l'activitat d'Intervals.icu i
+//    cada sincronització creés un DUPLICAT.
+// 3. La coerció d'IDs no era del tot estable entre número i string.
+//
+// A partir d'ara, per la durada d'una activitat d'Intervals.icu, només ens
+// fiem de `moving_time` i `elapsed_time` (segons, integer, segons docs oficials).
+// Si l'API no ho retorna, la durada queda `null` i la UI mostra "—".
+// No inventem cap valor.
+
 const KEY_STORAGE = 'bt_intervals_icu_api_key';
 
 export function getIntervalsApiKey() { return localStorage.getItem(KEY_STORAGE) || ''; }
@@ -78,7 +96,9 @@ export async function getRecentIntervalsActivities(days = 3650, onProgress) {
     onProgress?.(`Sincronitzant historial… bloc ${i + 1}/${chunks.length}`);
     const result = await fetchChunkResilient(chunks[i], onProgress, `bloc ${i + 1}/${chunks.length}`);
     for (const activity of Array.isArray(result.rows) ? result.rows : []) {
-      const key = String(activity?.id || `${activity?.start_date_local || ''}|${activity?.name || activity?.activity_name || ''}|${activity?.type || activity?.activity_type || ''}`);
+      const id = String(activity?.id ?? '').trim();
+      const fallback = `${activity?.start_date_local || ''}|${activity?.name || ''}|${activity?.type || ''}`;
+      const key = id ? `id:${id}` : `fb:${fallback}`;
       if (!seen.has(key)) { seen.add(key); all.push(activity); }
     }
     failedRanges.push(...result.failedRanges);
@@ -89,46 +109,46 @@ export async function getRecentIntervalsActivities(days = 3650, onProgress) {
 
 export async function getActivityStreams(activityId) { return request('streams', { id: activityId }); }
 
-const firstValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
-const numericValue = (...values) => {
-  const value = firstValue(...values);
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-};
+// ---- MAPPING helpers (only strict, no invented values) --------------------
 
-function durationSecondsValue(...values) {
-  const value = firstValue(...values);
-  if (value === undefined || value === null || value === '') return 0;
-  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : 0;
-  const text = String(value).trim();
-  if (!text) return 0;
-  if (text.includes(':')) {
-    const parts = text.split(':').map(Number);
-    if (parts.every(Number.isFinite)) {
-      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-      if (parts.length === 2) return parts[0] * 60 + parts[1];
-    }
+const firstValue = (...values) => values.find((v) => v !== undefined && v !== null && v !== '');
+
+function positiveNumber(...values) {
+  for (const v of values) {
+    if (v === undefined || v === null || v === '') continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
   }
-  const n = Number(text);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  return null;
+}
+
+function extractDurationSeconds(activity) {
+  const moving = positiveNumber(activity?.moving_time, activity?.movingTime);
+  if (moving) return moving;
+  const elapsed = positiveNumber(activity?.elapsed_time, activity?.elapsedTime);
+  if (elapsed) return elapsed;
+  return null;
+}
+
+function extractDistanceMeters(activity) {
+  return positiveNumber(activity?.icu_distance, activity?.distance, activity?.distance_meters, activity?.distanceMeters);
 }
 
 function buildWearable(activity, existingWearable = {}) {
-  const activityId = firstValue(activity?.id, existingWearable?.activityId);
+  const rawId = firstValue(activity?.id, existingWearable?.activityId);
+  const activityId = rawId === undefined || rawId === null ? null : String(rawId).trim() || null;
   const activityType = firstValue(activity?.type, activity?.activity_type, activity?.sport_type, existingWearable?.activityType);
   const name = firstValue(activity?.name, activity?.activity_name, activity?.title, existingWearable?.name);
   const startDateLocal = firstValue(activity?.start_date_local, activity?.startDateLocal, activity?.start_date, existingWearable?.startDateLocal);
-  const durationSeconds = durationSecondsValue(activity?.moving_time, activity?.movingTime, activity?.elapsed_time, activity?.elapsedTime, activity?.duration, activity?.duration_seconds, activity?.icu_recording_time, existingWearable?.durationSeconds);
-  const icuDistanceMeters = numericValue(activity?.icu_distance);
-  const distanceMeters = numericValue(icuDistanceMeters, activity?.distance, activity?.distance_meters, activity?.distanceMeters, existingWearable?.distanceMeters);
-  const distanceKm = numericValue(activity?.distance_km, activity?.distanceKm, icuDistanceMeters ? icuDistanceMeters / 1000 : 0, distanceMeters ? distanceMeters / 1000 : 0, existingWearable?.distanceKm);
-  const averageHeartRate = numericValue(activity?.average_heartrate, activity?.averageHeartRate, activity?.average_hr, activity?.avg_hr, existingWearable?.heartRate?.average);
-  const maxHeartRate = numericValue(activity?.max_heartrate, activity?.maxHeartRate, activity?.max_hr, existingWearable?.heartRate?.max);
-  const minHeartRate = numericValue(activity?.min_heartrate, activity?.minHeartRate, activity?.min_hr, activity?.min_hr, existingWearable?.heartRate?.min);
-  const calories = numericValue(activity?.calories, existingWearable?.calories);
-  const trainingLoad = numericValue(activity?.icu_training_load, activity?.training_load, activity?.trainingLoad, activity?.hr_load, activity?.power_load, activity?.pace_load, existingWearable?.trainingLoad);
-  const averageSpeed = numericValue(activity?.average_speed, activity?.averageSpeed, existingWearable?.averageSpeed);
-
+  const durationSeconds = extractDurationSeconds(activity);
+  const distanceMeters = extractDistanceMeters(activity);
+  const distanceKm = distanceMeters ? distanceMeters / 1000 : null;
+  const averageHeartRate = positiveNumber(activity?.average_heartrate, activity?.averageHeartRate, activity?.average_hr, activity?.avg_hr);
+  const maxHeartRate = positiveNumber(activity?.max_heartrate, activity?.maxHeartRate, activity?.max_hr);
+  const minHeartRate = positiveNumber(activity?.min_heartrate, activity?.minHeartRate, activity?.min_hr);
+  const calories = positiveNumber(activity?.calories);
+  const trainingLoad = positiveNumber(activity?.icu_training_load, activity?.training_load, activity?.trainingLoad, activity?.hr_load, activity?.power_load, activity?.pace_load);
+  const averageSpeed = positiveNumber(activity?.average_speed, activity?.averageSpeed);
   return {
     ...existingWearable,
     source: 'intervals.icu',
@@ -136,14 +156,14 @@ function buildWearable(activity, existingWearable = {}) {
     activityType: activityType || null,
     name: name || null,
     startDateLocal: startDateLocal || null,
-    durationSeconds,
-    distanceMeters,
-    distanceKm: distanceKm || null,
-    icuDistanceMeters: icuDistanceMeters || null,
-    averageSpeed: averageSpeed || null,
-    heartRate: { ...(existingWearable?.heartRate || {}), average: averageHeartRate || null, max: maxHeartRate || null, min: minHeartRate || null },
-    calories: calories || null,
-    trainingLoad: trainingLoad || null,
+    durationSeconds: durationSeconds || null,
+    distanceMeters: distanceMeters || null,
+    distanceKm,
+    icuDistanceMeters: positiveNumber(activity?.icu_distance),
+    averageSpeed,
+    heartRate: { ...(existingWearable?.heartRate || {}), average: averageHeartRate, max: maxHeartRate, min: minHeartRate },
+    calories,
+    trainingLoad,
     streamTypes: firstValue(activity?.stream_types, activity?.streamTypes, existingWearable?.streamTypes) || [],
     syncedAt: new Date().toISOString(),
   };
@@ -153,116 +173,118 @@ function activityDateKey(activity) {
   return String(firstValue(activity?.start_date_local, activity?.startDateLocal, activity?.start_date) || '').slice(0, 10);
 }
 
-function activityMatchKey(activity) {
-  const id = String(activity?.id || '').trim();
-  if (id) return `id:${id}`;
+function activityIdKey(activity) {
+  const id = activity?.id === undefined || activity?.id === null ? '' : String(activity.id).trim();
+  return id || null;
+}
+
+function activityFallbackKey(activity) {
   const date = String(firstValue(activity?.start_date_local, activity?.startDateLocal, activity?.start_date) || '').slice(0, 16);
   const name = String(firstValue(activity?.name, activity?.activity_name, activity?.title) || '').trim().toLowerCase();
   const type = String(firstValue(activity?.type, activity?.activity_type, activity?.sport_type) || '').trim().toLowerCase();
-  return `fallback:${date}|${name}|${type}`;
+  return `${date}|${name}|${type}`;
 }
 
-function wearableMatchKey(wearable, date) {
-  const id = String(wearable?.activityId || '').trim();
-  if (id) return `id:${id}`;
+function wearableIdKey(wearable) {
+  const id = wearable?.activityId === undefined || wearable?.activityId === null ? '' : String(wearable.activityId).trim();
+  return id || null;
+}
+
+function wearableFallbackKey(wearable, date) {
   const start = String(wearable?.startDateLocal || date || '').slice(0, 16);
   const name = String(wearable?.name || '').trim().toLowerCase();
   const type = String(wearable?.activityType || '').trim().toLowerCase();
-  return `fallback:${start}|${name}|${type}`;
+  return `${start}|${name}|${type}`;
+}
+
+function parseWearable(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'string') { try { return JSON.parse(raw) || {}; } catch (_) { return {}; } }
+  return raw || {};
 }
 
 export async function syncRecentIntervalsActivities({ pb, owner, days = 3650, typeResolver, onProgress }) {
   const result = await getRecentIntervalsActivities(days, onProgress);
   const activities = result.activities || [];
   let imported = 0;
-  let existing = 0;
+  let updated = 0;
   let skipped = 0;
-
-  const existingRows = await pb.collection('bt_sessions').getFullList({ sort: '-created', filter: `owner = \"${owner}\"` });
-  const knownRows = new Map();
+  const existingRows = await pb.collection('bt_sessions').getFullList({ sort: '-created', filter: `owner = "${owner}"` });
+  const byId = new Map();
   const rowsByDate = new Map();
   for (const row of existingRows) {
-    const rawWearable = row?.wearable;
-    const wearable = typeof rawWearable === 'string' ? (() => { try { return JSON.parse(rawWearable); } catch (_) { return {}; } })() : (rawWearable || {});
-    if (wearable?.source !== 'intervals.icu') continue;
-    const record = { row, wearable };
-    knownRows.set(wearableMatchKey(wearable, row?.date), record);
-    const date = String(row?.date || wearable?.startDateLocal || '').slice(0, 10);
-    if (date) {
-      const list = rowsByDate.get(date) || [];
+    const wearable = parseWearable(row?.wearable);
+    const sourced = wearable?.source === 'intervals.icu';
+    const record = { row, wearable, sourced };
+    if (sourced) {
+      const idKey = wearableIdKey(wearable);
+      if (idKey) byId.set(idKey, record);
+    }
+    const dateKey = String(row?.date || wearable?.startDateLocal || '').slice(0, 10);
+    if (dateKey) {
+      const list = rowsByDate.get(dateKey) || [];
       list.push(record);
-      rowsByDate.set(date, list);
+      rowsByDate.set(dateKey, list);
     }
   }
-
+  const consumed = new Set();
   for (const activity of activities) {
     try {
       const date = activityDateKey(activity);
       if (!date) { skipped += 1; continue; }
-      const key = activityMatchKey(activity);
-      let existingRecord = knownRows.get(key);
-
-      // Older imports could have stored an empty wearable without activityId.
-      // Match those records by date when there is only one candidate, or by
-      // name/type when several activities happened on the same day. This lets
-      // the current sync repair the existing 359 records instead of creating
-      // another copy of each one.
+      const idKey = activityIdKey(activity);
+      const fbKey = activityFallbackKey(activity);
+      let existingRecord = null;
+      if (idKey && byId.has(idKey)) existingRecord = byId.get(idKey);
       if (!existingRecord) {
-        const candidates = rowsByDate.get(date) || [];
-        if (candidates.length === 1) existingRecord = candidates[0];
-        else if (candidates.length > 1) {
-          const activityName = String(firstValue(activity?.name, activity?.activity_name, activity?.title) || '').trim().toLowerCase();
-          const activityType = String(firstValue(activity?.type, activity?.activity_type, activity?.sport_type) || '').trim().toLowerCase();
-          existingRecord = candidates.find(({ wearable }) => String(wearable?.name || '').trim().toLowerCase() === activityName && String(wearable?.activityType || '').trim().toLowerCase() === activityType);
-        }
+        const candidates = (rowsByDate.get(date) || []).filter((r) => !consumed.has(r.row.id));
+        existingRecord = candidates.find((r) => r.sourced && !wearableIdKey(r.wearable)) || null;
+        if (!existingRecord) existingRecord = candidates.find((r) => wearableFallbackKey(r.wearable, r.row?.date) === fbKey) || null;
+        if (!existingRecord && candidates.length === 1 && !candidates[0].sourced) existingRecord = candidates[0];
       }
-
-      const type = typeResolver?.(activity) || null;
+      const suggestedType = typeResolver?.(activity) || null;
       if (existingRecord) {
+        consumed.add(existingRecord.row.id);
         const wearable = buildWearable(activity, existingRecord.wearable);
-        const patch = {
-          date,
-          duration: wearable.durationSeconds > 0 ? Math.round((wearable.durationSeconds / 60) * 10) / 10 : existingRecord.row.duration || 0,
-          wearable,
-        };
-        if (type && existingRecord.row.type === 'manteniment') patch.type = type;
+        if (idKey) byId.set(idKey, { row: existingRecord.row, wearable, sourced: true });
+        const patch = { date, wearable };
+        if (wearable.durationSeconds) patch.duration = Math.round((wearable.durationSeconds / 60) * 10) / 10;
+        if (suggestedType && existingRecord.row.type === 'manteniment') patch.type = suggestedType;
         await pb.collection('bt_sessions').update(existingRecord.row.id, patch);
-        existing += 1;
+        updated += 1;
         continue;
       }
-
       const wearable = buildWearable(activity);
       const created = await pb.collection('bt_sessions').create({
-        type: type || 'manteniment', date,
-        duration: wearable.durationSeconds > 0 ? Math.round((wearable.durationSeconds / 60) * 10) / 10 : 0,
+        type: suggestedType || 'manteniment', date,
+        duration: wearable.durationSeconds ? Math.round((wearable.durationSeconds / 60) * 10) / 10 : 0,
         points: 0,
         notes: 'Activitat sincronitzada des d’Intervals.icu · pendent d’associar',
         data: [], wearable, owner,
       });
-      const record = { row: created, wearable };
-      knownRows.set(key, record);
+      const record = { row: created, wearable, sourced: true };
+      consumed.add(created.id);
+      if (idKey) byId.set(idKey, record);
       const list = rowsByDate.get(date) || [];
       list.push(record);
       rowsByDate.set(date, list);
       imported += 1;
-    } catch (_) {
+    } catch (error) {
       skipped += 1;
+      console.warn('[intervalsIcu] skip', activity?.id, error?.message || error);
     }
   }
-
-  return { imported, updated: existing, existing, skipped, total: activities.length, failedRanges: result.failedRanges };
+  return { imported, updated, existing: updated, skipped, total: activities.length, failedRanges: result.failedRanges };
 }
 
 export async function deleteAllIntervalsActivities({ pb, owner, onProgress }) {
-  const rows = await pb.collection('bt_sessions').getFullList({ filter: `owner = \"${owner}\"` });
-  const imported = rows.filter((row) => {
-    const raw = row?.wearable;
-    const wearable = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch (_) { return {}; } })() : (raw || {});
-    return wearable?.source === 'intervals.icu';
-  });
+  const rows = await pb.collection('bt_sessions').getFullList({ filter: `owner = "${owner}"` });
+  const imported = rows.filter((row) => parseWearable(row?.wearable)?.source === 'intervals.icu');
   for (let i = 0; i < imported.length; i += 1) {
     onProgress?.(`Esborrant activitats sincronitzades… ${i + 1}/${imported.length}`);
     await pb.collection('bt_sessions').delete(imported[i].id);
   }
   return imported.length;
 }
+
+export const __test__ = { buildWearable, extractDurationSeconds, extractDistanceMeters };
