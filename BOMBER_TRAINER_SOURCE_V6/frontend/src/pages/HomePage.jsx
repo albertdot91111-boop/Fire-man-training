@@ -24,6 +24,41 @@ function benchProgress(sessions) {
     return Math.round(Math.max(0, Math.min(100, Math.min((best.weight / 65) * 100, best.reps ? (best.reps / 20) * 100 : (best.weight / 65) * 100))));
 }
 
+// Percentatge de preparació visible a Inici. No depèn de l'IA: llegeix també
+// sessions antigues/manuals on el tipus o la durada poden arribar en formats diferents.
+function physicalProgress(sessions, type) {
+    const targets = { estructural: 130, forestal: 190 };
+    const target = targets[type];
+    if (!target) return null;
+    const rows = sessions
+        .filter((s) => String(s?.type || '').trim().toLowerCase() === type)
+        .map((s) => {
+            let seconds = Number(s?.duration) > 0 ? Number(s.duration) * 60 : 0;
+            if (!seconds) {
+                const data = Array.isArray(s?.data) ? s.data : [];
+                seconds = data.map((e) => {
+                    const value = e?.temps;
+                    if (typeof value === 'number') return value > 0 ? value : 0;
+                    const text = String(value ?? '').trim();
+                    if (!text) return 0;
+                    if (text.includes(':')) {
+                        const [m, sec = '0'] = text.split(':');
+                        const mm = Number(m); const ss = Number(sec);
+                        return Number.isFinite(mm) && Number.isFinite(ss) ? mm * 60 + ss : 0;
+                    }
+                    const n = Number(text);
+                    return Number.isFinite(n) && n > 0 ? n * 60 : 0;
+                }).reduce((sum, value) => sum + value, 0);
+            }
+            const penalties = Number(s?.penalties) || 0;
+            return seconds > 0 ? seconds + (type === 'estructural' ? penalties * 5 : penalties * 10) : 0;
+        })
+        .filter((seconds) => seconds > 0);
+    if (!rows.length) return null;
+    const latest = rows[rows.length - 1];
+    return Math.round(Math.max(0, Math.min(100, (1 - (latest - target) / target) * 100)));
+}
+
 export default function HomePage() {
     const [sessions, setSessions] = useState([]);
     const [coachPrompt, setCoachPrompt] = useState(null);
@@ -59,7 +94,18 @@ export default function HomePage() {
     const openCoachManually = () => { setManualCoachOpen(true); setCoachPrompt({ kind: 'manual', state: getTodayCoachState() }); };
     const diagnosis = useMemo(() => diagnoseBomberProgress(sessions), [sessions]);
     const points = totalPoints(sessions); const level = levelFor(points); const weak = useMemo(() => weakPoints(sessions), [sessions]); const currentStreak = streak(sessions); const motivation = MOTIVATION[sessions.length % MOTIVATION.length];
-    const progressByType = useMemo(() => { const map = {}; diagnosis.tests.forEach((test) => { map[test.type] = test.readiness?.progress ?? null; }); map.pressbanca = benchProgress(sessions); return map; }, [diagnosis, sessions]);
+    const progressByType = useMemo(() => {
+        const map = {};
+        diagnosis.tests.forEach((test) => { map[test.type] = test.readiness?.progress ?? null; });
+        // Fallback robust: structural/forestals visibles fins i tot si una sessió
+        // antiga no és compatible amb el format que usa el motor d'IA.
+        ['estructural', 'forestal'].forEach((type) => {
+            const direct = physicalProgress(sessions, type);
+            if (direct !== null) map[type] = direct;
+        });
+        map.pressbanca = benchProgress(sessions);
+        return map;
+    }, [diagnosis, sessions]);
 
     return (
         <AppShell title="INICI">
