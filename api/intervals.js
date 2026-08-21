@@ -16,6 +16,7 @@ async function fetchIntervals(path, apiKey) {
         Pragma: 'no-cache',
       },
       cache: 'no-store',
+      redirect: 'follow',
     });
     const text = await response.text();
     let body;
@@ -26,7 +27,9 @@ async function fetchIntervals(path, apiKey) {
       continue;
     }
     if (!response.ok) {
-      const detail = body?.error || body?.message || body?.raw || `Intervals.icu ha retornat ${response.status}.`;
+      let detail = body?.error || body?.message || body?.raw || `Intervals.icu ha retornat ${response.status}.`;
+      if (response.status === 401) detail = 'Clau API d’Intervals.icu no autoritzada (401). Comprova que has enganxat la clau personal exacta de Developer Settings.';
+      if (response.status === 403) detail = 'Intervals.icu ha rebutjat l’accés (403). La clau és incorrecta, està revocada o no té el format esperat.';
       const error = new Error(String(detail));
       error.status = response.status;
       throw error;
@@ -59,12 +62,10 @@ export default async function handler(req, res) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(oldest) || !/^\d{4}-\d{2}-\d{2}$/.test(newest)) {
         return res.status(400).json({ error: 'Dates oldest/newest no vàlides.' });
       }
-      const fields = [
-        'id','name','type','start_date_local','start_date','distance','icu_distance','moving_time','elapsed_time',
-        'average_speed','average_heartrate','max_heartrate','min_heartrate','calories',
-        'icu_training_load','stream_types','sub_type','source'
-      ].join(',');
-      const path = `/api/v1/athlete/0/activities?oldest=${encodeURIComponent(oldest)}&newest=${encodeURIComponent(newest)}&limit=5000&fields=${encodeURIComponent(fields)}`;
+      // Keep this endpoint deliberately simple. Intervals.icu already returns
+      // the standard activity fields we need; an explicit fields= list can
+      // become stale when the API adds/removes fields and makes sync fail.
+      const path = `/api/v1/athlete/0/activities?oldest=${encodeURIComponent(oldest)}&newest=${encodeURIComponent(newest)}&limit=5000`;
       const rows = await fetchIntervals(path, apiKey);
       return res.status(200).json(Array.isArray(rows) ? rows : []);
     }
