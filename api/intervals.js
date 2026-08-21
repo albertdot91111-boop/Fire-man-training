@@ -60,12 +60,13 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Dates oldest/newest no vàlides.' });
       }
       const fields = [
-        'id','name','type','start_date_local','start_date','distance','moving_time','elapsed_time',
+        'id','name','type','start_date_local','start_date','distance','icu_distance','moving_time','elapsed_time',
         'average_speed','average_heartrate','max_heartrate','min_heartrate','calories',
         'icu_training_load','stream_types','sub_type','source'
       ].join(',');
       const path = `/api/v1/athlete/0/activities?oldest=${encodeURIComponent(oldest)}&newest=${encodeURIComponent(newest)}&limit=5000&fields=${encodeURIComponent(fields)}`;
-      return res.status(200).json(await fetchIntervals(path, apiKey));
+      const rows = await fetchIntervals(path, apiKey);
+      return res.status(200).json(Array.isArray(rows) ? rows : []);
     }
 
     if (action === 'activity') {
