@@ -10,7 +10,7 @@ function dateKey(date = new Date()) { const y = date.getFullYear(); const m = St
 function weekKey(date = new Date()) { const d = new Date(date.getFullYear(),date.getMonth(),date.getDate()); const day=d.getDay()||7; d.setDate(d.getDate()-day+1); return dateKey(d); }
 function storageKey(owner,date){return `${STORAGE_PREFIX}${owner||'guest'}_${date}`;}
 function freeMealKey(owner,week){return `${FREE_MEAL_PREFIX}${owner||'guest'}_${week}`;}
-function readStatus(owner,date){try{const value=localStorage.getItem(storageKey(owner,date));return ['good','bad','free_meal'].includes(value)?value:null;}catch(_){return null;}}
+export function readNutritionStatus(owner,date){try{const value=localStorage.getItem(storageKey(owner,date));return ['good','bad','free_meal'].includes(value)?value:null;}catch(_){return null;}}
 function writeStatus(owner,date,value){try{localStorage.setItem(storageKey(owner,date),value);}catch(_){}
 }
 function hasFreeMeal(owner,week){try{return localStorage.getItem(freeMealKey(owner,week))==='1';}catch(_){return false;}}
@@ -21,7 +21,7 @@ export default function NutritionDaily(){
   const location=useLocation();
   const owner=pb.authStore.record?.id||'guest';
   const [now,setNow]=useState(new Date());
-  const [status,setStatus]=useState(()=>readStatus(owner,dateKey()));
+  const [status,setStatus]=useState(()=>readNutritionStatus(owner,dateKey()));
   const [open,setOpen]=useState(false);
   const [manualOpen,setManualOpen]=useState(false);
   const [permission,setPermission]=useState(typeof Notification!=='undefined'?Notification.permission:'unsupported');
@@ -31,7 +31,7 @@ export default function NutritionDaily(){
   const due=useMemo(()=>now.getHours()>=20&&!status,[now,status]);
 
   useEffect(()=>{const timer=window.setInterval(()=>setNow(new Date()),60000);return()=>window.clearInterval(timer);},[]);
-  useEffect(()=>{setStatus(readStatus(owner,today));},[owner,today]);
+  useEffect(()=>{setStatus(readNutritionStatus(owner,today));},[owner,today]);
   useEffect(()=>{
     if(!due)return;
     setOpen(true);
@@ -41,20 +41,43 @@ export default function NutritionDaily(){
       if(!already){try{new Notification('🍽️ Com has anat avui?',{body:'Marca el teu dia o gaudeix del teu àpat lliure de la setmana.',tag:'bt-nutrition-daily'});}catch(_){} try{localStorage.setItem(notificationKey,'1');}catch(_){} }
     }
   },[due,permission,owner,today]);
-  const save=(value)=>{if(value==='free_meal')useFreeMeal(owner,week);writeStatus(owner,today,value);setStatus(value);setOpen(false);setManualOpen(false);window.dispatchEvent(new CustomEvent('bt:nutrition-updated',{detail:{date:today,status:value}}));};
+  const save=(value)=>{if(value==='free_meal')useFreeMeal(owner,week);writeStatus(owner,today,value);setStatus(value);setOpen(false);setManualOpen(false);window.dispatchEvent(new CustomEvent('bt:nutrition-updated',{detail:{date:today,status:value,owner}}));};
   const requestNotifications=async()=>{if(typeof Notification==='undefined')return;try{setPermission(await Notification.requestPermission());}catch(_){} };
+
   useEffect(()=>{
+    if(location.pathname!=='/progres')return undefined;
+    let timer=null;
     const decorateCalendar=()=>{
-      if(location.pathname!=='/progres')return;
-      const heading=Array.from(document.querySelectorAll('h2')).find(el=>el.textContent?.trim()==='Calendari del mes'); const section=heading?.closest('section'); if(!section)return; const grid=heading.nextElementSibling?.nextElementSibling; if(!grid)return;
-      Array.from(grid.querySelectorAll('button')).forEach(button=>{
-        button.querySelector('[data-bt-nutrition-marker]')?.remove(); const day=Number(button.querySelector('span')?.textContent?.trim()); if(!Number.isInteger(day)||day<1||day>31)return;
-        const base=new Date(now.getFullYear(),now.getMonth(),1); const key=dateKey(new Date(base.getFullYear(),base.getMonth(),day)); const markerStatus=readStatus(owner,key); if(!markerStatus)return;
-        button.style.position='relative'; const marker=document.createElement('span'); marker.dataset.btNutritionMarker='1'; marker.title=markerStatus==='free_meal'?'Àpat lliure de la setmana':markerStatus==='good'?'Nutrició correcta':'Nutrició a millorar'; marker.textContent=markerStatus==='free_meal'?'🍕':markerStatus==='good'?'✓':'×'; marker.style.cssText=`position:absolute;right:4px;bottom:3px;width:18px;height:18px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:white;background:${markerStatus==='good'||markerStatus==='free_meal'?'#16a34a':'#dc2626'};box-shadow:0 1px 3px rgba(0,0,0,.18);z-index:5;`; button.appendChild(marker);
+      const heading=Array.from(document.querySelectorAll('h2')).find(el=>el.textContent?.trim()==='Calendari del mes');
+      const section=heading?.closest('section');
+      if(!section)return;
+      const buttons=Array.from(section.querySelectorAll('button'));
+      const base=new Date(now.getFullYear(),now.getMonth(),1);
+      buttons.forEach(button=>{
+        button.querySelectorAll('[data-bt-nutrition-marker]').forEach(marker=>marker.remove());
+        const dayText=button.querySelector(':scope > span')?.textContent?.trim()||button.querySelector('span')?.textContent?.trim()||'';
+        const day=Number(dayText);
+        if(!Number.isInteger(day)||day<1||day>31)return;
+        const key=dateKey(new Date(base.getFullYear(),base.getMonth(),day));
+        const markerStatus=readNutritionStatus(owner,key);
+        if(!markerStatus)return;
+        button.style.position='relative';
+        const marker=document.createElement('span');
+        marker.dataset.btNutritionMarker='1';
+        marker.title=markerStatus==='free_meal'?'Àpat lliure de la setmana':markerStatus==='good'?'Nutrició correcta':'Nutrició a millorar';
+        marker.textContent=markerStatus==='free_meal'?'🍕':markerStatus==='good'?'✓':'×';
+        marker.style.cssText=`position:absolute;right:4px;bottom:3px;width:19px;height:19px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:white;background:${markerStatus==='good'||markerStatus==='free_meal'?'#16a34a':'#dc2626'};box-shadow:0 1px 3px rgba(0,0,0,.18);z-index:20;pointer-events:none;`;
+        button.appendChild(marker);
       });
     };
-    const observer=new MutationObserver(()=>window.requestAnimationFrame(decorateCalendar)); observer.observe(document.body,{childList:true,subtree:true}); const refresh=()=>window.setTimeout(decorateCalendar,30); window.addEventListener('bt:nutrition-updated',refresh); const initial=window.setTimeout(decorateCalendar,80); return()=>{observer.disconnect();window.removeEventListener('bt:nutrition-updated',refresh);window.clearTimeout(initial);};
-  },[location.pathname,owner,now]);
+    const schedule=()=>{if(timer)window.clearTimeout(timer);timer=window.setTimeout(decorateCalendar,40);};
+    const observer=new MutationObserver(schedule);
+    observer.observe(document.body,{childList:true,subtree:true});
+    window.addEventListener('bt:nutrition-updated',schedule);
+    schedule();
+    return()=>{observer.disconnect();window.removeEventListener('bt:nutrition-updated',schedule);if(timer)window.clearTimeout(timer);};
+  },[location.pathname,owner,now,status]);
+
   if(!pb.authStore.isValid)return null;
   const dialogOpen=(open&&due)||(manualOpen&&!status);
   return <>
