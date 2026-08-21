@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - version-no-funciona-2026-08-21
+  pull_request:
+    branches:
+      - main
 
 jobs:
   export:
