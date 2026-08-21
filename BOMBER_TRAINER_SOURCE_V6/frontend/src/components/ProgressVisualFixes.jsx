@@ -4,6 +4,17 @@ import pb from '@/lib/pocketbaseClient';
 import { readNutritionStatus } from './NutritionDaily';
 
 const keyFor = (year, month, day) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+const PERSONAL_KEY = 'bomber-trainer-personal-calendar-v1';
+
+function readPersonalDay(date) {
+  try {
+    const raw = localStorage.getItem(PERSONAL_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    return data?.[date] || null;
+  } catch (_) {
+    return null;
+  }
+}
 
 export default function ProgressVisualFixes() {
   const location = useLocation();
@@ -24,27 +35,57 @@ export default function ProgressVisualFixes() {
             const day = Number(dayNode?.textContent?.trim());
             if (!day || day < 1 || day > 31) return;
 
-            // Every calendar day is editable, including empty days.
             button.disabled = false;
             button.removeAttribute('disabled');
             button.style.cursor = 'pointer';
             button.setAttribute('aria-label', `Obrir calendari personal del dia ${day}`);
 
             const date = keyFor(now.getFullYear(), now.getMonth(), day);
-            const status = readNutritionStatus(owner, date);
+            const personal = readPersonalDay(date);
+            const nutrition = personal?.nutrition || readNutritionStatus(owner, date);
+            const trained = typeof personal?.trained === 'boolean' ? personal.trained : null;
+
             button.querySelectorAll('[data-bt-food-marker]').forEach((el) => el.remove());
+            button.querySelectorAll('[data-bt-personal-marker]').forEach((el) => el.remove());
             button.style.boxShadow = '';
             button.style.borderRadius = '';
-            if (!status) return;
+            button.title = '';
+
+            let markerText = '';
+            let markerLabel = '';
+            let outline = '';
+            if (nutrition === 'free_meal' || nutrition === 'out') {
+              markerText = '🍕';
+              markerLabel = 'Àpat fora';
+              outline = '#f59e0b';
+            } else if (nutrition === 'good') {
+              markerText = '✓';
+              markerLabel = 'Nutrició correcta';
+              outline = '#16a34a';
+            } else if (nutrition === 'bad') {
+              markerText = '×';
+              markerLabel = 'Nutrició a millorar';
+              outline = '#dc2626';
+            } else if (trained === true) {
+              markerText = '✓';
+              markerLabel = 'Entrenament registrat';
+              outline = '#16a34a';
+            } else if (trained === false) {
+              markerText = '×';
+              markerLabel = 'No entrenat';
+              outline = '#dc2626';
+            }
+
+            if (!markerText) return;
             const marker = document.createElement('span');
-            marker.dataset.btFoodMarker = 'true';
-            marker.textContent = status === 'free_meal' ? '🍕' : status === 'good' ? '✓' : '×';
-            marker.setAttribute('aria-label', status === 'free_meal' ? 'Àpat lliure' : status === 'good' ? 'Nutrició correcta' : 'Nutrició a millorar');
+            marker.dataset.btPersonalMarker = 'true';
+            marker.textContent = markerText;
+            marker.setAttribute('aria-label', markerLabel);
             marker.style.cssText = 'position:absolute;right:4px;bottom:3px;font-size:12px;font-weight:900;line-height:1;pointer-events:none;';
             button.style.position = 'relative';
-            button.style.boxShadow = status === 'free_meal' ? 'inset 0 0 0 3px #f59e0b' : status === 'good' ? 'inset 0 0 0 3px #16a34a' : 'inset 0 0 0 3px #dc2626';
+            button.style.boxShadow = `inset 0 0 0 3px ${outline}`;
             button.style.borderRadius = '0.75rem';
-            button.title = status === 'free_meal' ? '🍕 Àpat lliure' : status === 'good' ? '🟢 Nutrició correcta' : '🔴 Nutrició a millorar';
+            button.title = markerLabel;
             button.appendChild(marker);
           });
         }
@@ -63,11 +104,15 @@ export default function ProgressVisualFixes() {
     observer.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('bt:nutrition-updated', refresh);
     window.addEventListener('bt:progress-updated', refresh);
+    window.addEventListener('bt-personal-calendar-change', refresh);
+    window.addEventListener('storage', refresh);
     refresh();
     return () => {
       observer.disconnect();
       window.removeEventListener('bt:nutrition-updated', refresh);
       window.removeEventListener('bt:progress-updated', refresh);
+      window.removeEventListener('bt-personal-calendar-change', refresh);
+      window.removeEventListener('storage', refresh);
       window.clearTimeout(timer);
     };
   }, [location.pathname]);
