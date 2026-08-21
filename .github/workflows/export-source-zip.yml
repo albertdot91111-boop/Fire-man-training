@@ -14,12 +14,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Create ZIP
+      - name: Create ZIP outside source tree
         run: |
-          zip -r Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip . -x '.git/*' 'Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip'
+          rm -f /tmp/Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip
+          cd "$GITHUB_WORKSPACE"
+          zip -r /tmp/Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip . -x './.git/*'
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
           name: Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21
-          path: Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip
+          path: /tmp/Bomber_Trainer_VERSION_NO_FUNCIONA_2026-08-21.zip
           retention-days: 30
