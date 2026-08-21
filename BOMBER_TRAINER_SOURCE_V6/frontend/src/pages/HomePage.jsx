@@ -16,12 +16,35 @@ const TODAY_ACTIONS = [
     { label: '⏸️ AVUI NO PUC ENTRENAR', to: '/entrena/descans', type: 'descans', detail: 'Registra el dia' },
 ];
 
+// Una sessió parcial serveix per a gràfiques/evolució, però no entra al % principal.
+const PRESS_BENCH_TARGET_KG = 65;
+const PRESS_BENCH_TARGET_REPS = 20;
+
+function isCompleteBenchSession(session) {
+    if (String(session?.type || '').trim().toLowerCase() !== 'pressbanca') return false;
+    const data = Array.isArray(session?.data) ? session.data : [];
+    const entry = data.find((e) => String(e?.exercici || '').trim().toLowerCase() === 'press banca');
+    if (!entry) return false;
+    const weight = Number(entry.pes);
+    const reps = Number(entry.reps ?? entry.repeticions);
+    const series = Number(entry.series);
+    return Number.isFinite(weight) && weight > 0 && Number.isFinite(reps) && reps > 0 && Number.isFinite(series) && series > 0;
+}
+
 function benchProgress(sessions) {
-    const entries = sessions.flatMap((s) => Array.isArray(s.data) ? s.data : []).filter((e) => String(e.exercici || '').toLowerCase().includes('press banca'));
-    const values = entries.map((e) => ({ weight: Number(e.pes) || 0, reps: Number(e.repeticions) || Number(e.reps) || 0 })).filter((e) => e.weight > 0);
+    const complete = sessions.filter(isCompleteBenchSession);
+    if (!complete.length) return null;
+    const values = complete.flatMap((s) => (Array.isArray(s.data) ? s.data : [])
+        .filter((e) => String(e?.exercici || '').trim().toLowerCase() === 'press banca')
+        .map((e) => ({ weight: Number(e.pes) || 0, reps: Number(e.reps ?? e.repeticions) || 0 })));
     if (!values.length) return null;
-    const best = values.reduce((a, b) => (b.weight > a.weight ? b : a), values[0]);
-    return Math.round(Math.max(0, Math.min(100, Math.min((best.weight / 65) * 100, best.reps ? (best.reps / 20) * 100 : (best.weight / 65) * 100))));
+    const best = values.reduce((a, b) => {
+        const aScore = Math.min(a.weight / PRESS_BENCH_TARGET_KG, a.reps / PRESS_BENCH_TARGET_REPS);
+        const bScore = Math.min(b.weight / PRESS_BENCH_TARGET_KG, b.reps / PRESS_BENCH_TARGET_REPS);
+        return bScore > aScore ? b : a;
+    }, values[0]);
+    return Math.round(Math.max(0, Math.min(100,
+        Math.min((best.weight / PRESS_BENCH_TARGET_KG) * 100, (best.reps / PRESS_BENCH_TARGET_REPS) * 100))));
 }
 
 const STRUCTURAL_EXERCISES = [
@@ -31,6 +54,15 @@ const STRUCTURAL_EXERCISES = [
     '4. Recorregut en C',
     '5. Arrossegament de maniquí',
     '6. Esprint final',
+];
+
+const AQUATIC_EXERCISES = [
+    '1. Entrada segura',
+    '2. Apnea',
+    '3. Batuda / bicicleta',
+    '4. Estil lliure sota corxeres',
+    '5. Crol de salvament',
+    '6. Remolc de maniquí',
 ];
 
 function parseProgressSeconds(value) {
@@ -50,33 +82,47 @@ function parseProgressSeconds(value) {
     return Number.isFinite(n) && n > 0 ? n * 60 : 0;
 }
 
-function isCompleteStructuralSession(session) {
-    if (String(session?.type || '').trim().toLowerCase() !== 'estructural') return false;
+function isCompleteTimedSession(session, type, requiredExercises) {
+    if (String(session?.type || '').trim().toLowerCase() !== type) return false;
     const data = Array.isArray(session?.data) ? session.data : [];
-    return STRUCTURAL_EXERCISES.every((name) => {
+    return requiredExercises.every((name) => {
         const entry = data.find((e) => String(e?.exercici || '').trim().toLowerCase() === name.toLowerCase());
         return parseProgressSeconds(entry?.temps) > 0;
     });
 }
 
-// El % d'ESTRUCTURAL només representa una ruta completa: els 6 exercicis.
-// Una sessió parcial continua guardada i disponible per a les gràfiques, però
-// no contamina el percentatge de preparació.
+function isCompleteStructuralSession(session) {
+    return isCompleteTimedSession(session, 'estructural', STRUCTURAL_EXERCISES);
+}
+
+function isCompleteAquaticSession(session) {
+    return isCompleteTimedSession(session, 'aquatic', AQUATIC_EXERCISES);
+}
+
+// Estructural i aquàtica segueixen ara exactament la mateixa regla que forestal:
+// parcial = gràfica/evolució; completa = pot entrar al % principal.
 function physicalProgress(sessions, type) {
-    const targets = { estructural: 130, forestal: 190 };
+    // Referències orientatives del projecte, no barems oficials.
+    const targets = { estructural: 130, forestal: 190, aquatic: 190 };
     const target = targets[type];
     if (!target) return null;
+    const completeCheck = type === 'estructural'
+        ? isCompleteStructuralSession
+        : type === 'aquatic'
+            ? isCompleteAquaticSession
+            : () => true;
     const rows = sessions
         .filter((s) => String(s?.type || '').trim().toLowerCase() === type)
-        .filter((s) => type !== 'estructural' || isCompleteStructuralSession(s))
+        .filter(completeCheck)
         .map((s) => {
             let seconds = Number(s?.duration) > 0 ? Number(s.duration) * 60 : 0;
-            if (!seconds || type === 'estructural') {
+            if (!seconds || type === 'estructural' || type === 'aquatic') {
                 const data = Array.isArray(s?.data) ? s.data : [];
                 seconds = data.map((e) => parseProgressSeconds(e?.temps)).reduce((sum, value) => sum + value, 0);
             }
             const penalties = Number(s?.penalties) || 0;
-            return seconds > 0 ? seconds + (type === 'estructural' ? penalties * 5 : penalties * 10) : 0;
+            const penaltySeconds = type === 'aquatic' ? penalties * 10 : type === 'estructural' ? penalties * 5 : penalties * 10;
+            return seconds > 0 ? seconds + penaltySeconds : 0;
         })
         .filter((seconds) => seconds > 0);
     if (!rows.length) return null;
@@ -122,10 +168,10 @@ export default function HomePage() {
     const progressByType = useMemo(() => {
         const map = {};
         diagnosis.tests.forEach((test) => { map[test.type] = test.readiness?.progress ?? null; });
-        ['estructural', 'forestal'].forEach((type) => {
+        ['estructural', 'forestal', 'aquatic'].forEach((type) => {
             const direct = physicalProgress(sessions, type);
             if (direct !== null) map[type] = direct;
-            else if (type === 'estructural') map[type] = null;
+            else map[type] = null;
         });
         map.pressbanca = benchProgress(sessions);
         return map;
