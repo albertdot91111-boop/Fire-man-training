@@ -23,6 +23,13 @@ export default function ProgressVisualFixes() {
             const dayNode = [...button.querySelectorAll('span')].find((el) => /^\d{1,2}$/.test(el.textContent?.trim() || ''));
             const day = Number(dayNode?.textContent?.trim());
             if (!day || day < 1 || day > 31) return;
+
+            // Every calendar day is editable, including empty days.
+            button.disabled = false;
+            button.removeAttribute('disabled');
+            button.style.cursor = 'pointer';
+            button.setAttribute('aria-label', `Obrir calendari personal del dia ${day}`);
+
             const date = keyFor(now.getFullYear(), now.getMonth(), day);
             const status = readNutritionStatus(owner, date);
             button.querySelectorAll('[data-bt-food-marker]').forEach((el) => el.remove());
