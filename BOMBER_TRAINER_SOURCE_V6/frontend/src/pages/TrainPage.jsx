@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import Helmet from 'react-helmet';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
 import StructuralExerciseGraphic from '@/components/StructuralExerciseGraphic';
 import { INCIDENTS, PLANS, POINTS, TYPES, formatTime, parseTime, today } from '@/lib/btData';
