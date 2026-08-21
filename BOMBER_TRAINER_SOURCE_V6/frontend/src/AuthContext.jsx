@@ -5,8 +5,20 @@ const AuthContext = createContext(null);
 const AUTH_REFRESH_KEY = 'bt:last-auth-refresh';
 const AUTH_REFRESH_MS = 20 * 60 * 1000;
 
+const errorStatus = (error) => Number(error?.status || error?.response?.code || 0);
+const friendlyAuthError = (error, fallback = 'No s’ha pogut iniciar sessió.') => {
+  const status = errorStatus(error);
+  if (status === 429) return 'El servidor ha assolit temporalment el límit de peticions. No s’han perdut les dades. Espera que es restableixi i torna-ho a provar.';
+  if (status === 400 || status === 401) return 'Correu o contrasenya incorrectes.';
+  if (status === 403) return 'Accés rebutjat pel servidor. Torna-ho a provar més tard.';
+  if (status >= 500) return 'El servidor està temporalment ocupat. Torna-ho a provar en uns segons.';
+  const raw = String(error?.response?.message || error?.message || '').trim();
+  if (/something went wrong|failed to fetch|network|fetch/i.test(raw)) return 'No s’ha pogut contactar amb el servidor. Comprova la connexió i torna-ho a provar.';
+  return raw || fallback;
+};
+
 const isDefinitiveAuthFailure = (error) => {
-  const status = Number(error?.status || error?.response?.code || 0);
+  const status = errorStatus(error);
   return status === 401 || status === 403;
 };
 
@@ -33,7 +45,6 @@ export const AuthProvider = ({ children }) => {
       if (pb.authStore.isValid) {
         const lastRefresh = Number(localStorage.getItem(AUTH_REFRESH_KEY) || 0);
         const shouldRefresh = !lastRefresh || Date.now() - lastRefresh > AUTH_REFRESH_MS;
-
         if (shouldRefresh) {
           try {
             await pb.collection('users').authRefresh();
@@ -41,8 +52,6 @@ export const AuthProvider = ({ children }) => {
             setUser(pb.authStore.record);
             setIsAuthenticated(true);
           } catch (error) {
-            // A 429/network/server error must never log the user out. Keep the
-            // persisted token and let normal record requests continue.
             if (isDefinitiveAuthFailure(error)) {
               pb.authStore.clear();
               localStorage.removeItem(AUTH_REFRESH_KEY);
@@ -67,9 +76,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  useEffect(() => {
-    checkUserAuth();
-  }, [checkUserAuth]);
+  useEffect(() => { checkUserAuth(); }, [checkUserAuth]);
 
   const login = useCallback(async (email, password) => {
     let lastError = null;
@@ -83,21 +90,29 @@ export const AuthProvider = ({ children }) => {
         return;
       } catch (error) {
         lastError = error;
-        const status = Number(error?.status || error?.response?.code || 0);
+        const status = errorStatus(error);
         if (status === 400 || status === 401 || status === 403 || status === 429) break;
         if (attempt === 0) await wait(700);
       }
     }
-    throw lastError || new Error('No s’ha pogut iniciar sessió.');
+    const normalized = new Error(friendlyAuthError(lastError));
+    normalized.status = errorStatus(lastError);
+    throw normalized;
   }, []);
 
   const signup = useCallback(async (email, password) => {
-    await pb.collection('users').create({ email, password, passwordConfirm: password });
-    await pb.collection('users').authWithPassword(email, password);
-    localStorage.setItem(AUTH_REFRESH_KEY, String(Date.now()));
-    setUser(pb.authStore.record);
-    setIsAuthenticated(true);
-    setAuthChecked(true);
+    try {
+      await pb.collection('users').create({ email, password, passwordConfirm: password });
+      await pb.collection('users').authWithPassword(email, password);
+      localStorage.setItem(AUTH_REFRESH_KEY, String(Date.now()));
+      setUser(pb.authStore.record);
+      setIsAuthenticated(true);
+      setAuthChecked(true);
+    } catch (error) {
+      const normalized = new Error(friendlyAuthError(error, 'No s’ha pogut crear el compte.'));
+      normalized.status = errorStatus(error);
+      throw normalized;
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -107,9 +122,7 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
   }, []);
 
-  const navigateToLogin = useCallback(() => {
-    window.location.href = '/login';
-  }, []);
+  const navigateToLogin = useCallback(() => { window.location.href = '/login'; }, []);
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated, isAuthed: isAuthenticated, isLoadingAuth, isLoadingPublicSettings: false, authError, authChecked, login, signup, logout, navigateToLogin, checkUserAuth, checkAppState: checkUserAuth }}>
