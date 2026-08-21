@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, LineChart, Bot, UserRound } from 'lucide-react';
 import pb from '@/lib/pocketbaseClient';
+import PersonalCalendarOverlay from '@/components/PersonalCalendarOverlay';
 
 const NAV = [
     { to: '/', label: 'Inici', Icon: Home },
@@ -55,6 +56,7 @@ export default function AppShell({ title, children }) {
                     })}
                 </div>
             </nav>
+            <PersonalCalendarOverlay />
         </div>
     );
 }
