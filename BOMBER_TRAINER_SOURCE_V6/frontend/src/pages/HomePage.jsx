@@ -1,10 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Helmet from 'react-helmet';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
-import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints } from '@/lib/btData';
+import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints, today } from '@/lib/btData';
 import { diagnoseBomberProgress } from '@/aiEngine';
+import {
+    COACH_OPTIONS,
+    chooseCoachOption,
+    getCoachMotivation,
+    getTodayCoachState,
+    markCoachCompleted,
+    markCoachUnavailable,
+    nextCoachCheckMs,
+    requestCoachNotifications,
+    shouldCoachPrompt,
+    showCoachNotification,
+} from '@/lib/dailyCoachReminder';
 
 const TODAY_ACTIONS = [
     { label: '🔥 ESPECÍFIC', to: '/entrena/estructural', type: 'estructural', detail: 'Incendi estructural · 16 kg + ninot 50 kg' },
@@ -34,17 +46,67 @@ function benchProgress(sessions) {
 
 export default function HomePage() {
     const [sessions, setSessions] = useState([]);
+    const [coachPrompt, setCoachPrompt] = useState(null);
+    const [notifications, setNotifications] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
+    const navigate = useNavigate();
 
-    useEffect(() => {
+    const loadSessions = () => {
         const owner = pb.authStore.record?.id;
         if (!owner) { setSessions([]); return; }
         pb.collection('bt_sessions').getFullList({ sort: '-date', filter: `owner = \"${owner}\"` }).then(setSessions).catch(() => setSessions([]));
-    }, []);
+    };
+
+    useEffect(() => { loadSessions(); }, []);
+
+    const hasTodayTraining = useMemo(() => sessions.some((s) => s.date === today() && s.type !== 'descans'), [sessions]);
+
+    useEffect(() => {
+        if (hasTodayTraining) {
+            markCoachCompleted();
+            setCoachPrompt(null);
+            return undefined;
+        }
+
+        let cancelled = false;
+        const check = async () => {
+            if (cancelled) return;
+            const result = shouldCoachPrompt({ hasTodayTraining });
+            if (!result.prompt) return;
+            setCoachPrompt({ kind: result.kind, state: result.state });
+            await showCoachNotification(
+                result.kind === 'second' ? '⚠️ Encara no has entrenat avui' : '🔥 Ei! Avui què toca?',
+                result.kind === 'second' ? 'Circuit · Pit · Manteniment. O marca «Avui no puc». Tu tries, però fes alguna cosa útil.' : 'Tria Circuit, Pit o Manteniment i registra-ho quan acabis.'
+            );
+        };
+
+        check();
+        const ms = nextCoachCheckMs({ hasTodayTraining });
+        const timer = ms === null ? null : window.setTimeout(check, Math.max(1000, ms));
+        const refresh = window.setInterval(check, 60 * 1000);
+        return () => { cancelled = true; if (timer) window.clearTimeout(timer); window.clearInterval(refresh); };
+    }, [hasTodayTraining]);
+
+    const choose = (key) => {
+        chooseCoachOption(key);
+        const option = COACH_OPTIONS.find((item) => item.key === key);
+        if (option) navigate(option.to);
+    };
+
+    const handleUnavailable = () => {
+        markCoachUnavailable();
+        setCoachPrompt(null);
+    };
+
+    const enableNotifications = async () => {
+        const result = await requestCoachNotifications();
+        setNotifications(result);
+    };
 
     const diagnosis = useMemo(() => diagnoseBomberProgress(sessions), [sessions]);
     const points = totalPoints(sessions);
     const level = levelFor(points);
     const weak = useMemo(() => weakPoints(sessions), [sessions]);
+    const currentStreak = streak(sessions);
     const motivation = MOTIVATION[sessions.length % MOTIVATION.length];
     const progressByType = useMemo(() => {
         const map = {};
@@ -63,10 +125,27 @@ export default function HomePage() {
         <AppShell title="INICI">
             <Helmet><title>Inici — BOMBER TRAINER</title><meta name="description" content="Entrenaments i progrés diari per a opositors de Bombers." /></Helmet>
 
+            {coachPrompt && !hasTodayTraining && <section className="rounded-3xl border border-yellow-200 bg-gradient-to-br from-yellow-50 to-white p-5 shadow-sm" aria-labelledby="daily-coach-heading">
+                <div className="flex items-start justify-between gap-3">
+                    <div><p className="text-xs font-bold tracking-[0.18em] text-yellow-700">ENTRENADOR DIARI</p><h2 id="daily-coach-heading" className="mt-1 text-xl font-extrabold tracking-tight">🔥 Ei! Avui què toca?</h2><p className="mt-2 text-sm font-medium text-slate-600">{getCoachMotivation(new Date().getDate())}</p></div>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-slate-600 shadow-sm">RATXA {currentStreak} d</span>
+                </div>
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    {COACH_OPTIONS.map((option) => <button key={option.key} type="button" onClick={() => choose(option.key)} className="min-h-[64px] rounded-2xl bg-slate-900 px-3 py-2 text-left font-extrabold text-white shadow-sm active:scale-[0.985]"><span className="block">{option.label}</span><span className="mt-1 block text-xs font-medium text-slate-300">{option.detail}</span></button>)}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={handleUnavailable} className="min-h-[44px] rounded-xl bg-slate-100 px-4 text-sm font-bold text-slate-700">⏸️ Avui no puc</button>
+                    {notifications !== 'granted' && notifications !== 'unsupported' && <button type="button" onClick={enableNotifications} className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700">🔔 Activar avisos</button>}
+                </div>
+                <p className="mt-3 text-xs font-medium text-slate-500">Si tries una opció i en 6 hores encara no hi ha cap sessió registrada, et tornaré a avisar. Si marques «Avui no puc», avui no insistiré.</p>
+            </section>}
+
+            {hasTodayTraining && <section className="rounded-3xl border border-green-200 bg-green-50 p-5 shadow-sm"><p className="text-xs font-bold tracking-[0.18em] text-green-700">AVUI FET</p><h2 className="mt-1 text-xl font-extrabold">🔥 Molt bé. Sessió registrada.</h2><p className="mt-2 text-sm font-medium text-slate-700">{currentStreak > 1 ? `Ratxa activa: ${currentStreak} dies seguits. No la trenquis.` : 'Primera passa feta. Demà tornem-hi.'}</p></section>}
+
             <section className="grid grid-cols-3 gap-3" aria-label="Resum de progrés">
                 {[
                     ['PUNTS', points],
-                    ['RATXA', `${streak(sessions)} d`],
+                    ['RATXA', `${currentStreak} d`],
                     ['NIVELL', level.name],
                 ].map(([label, value]) => <div key={label} className="rounded-3xl bg-white border border-slate-200 p-4 text-center shadow-sm"><p className="text-xs font-bold tracking-widest text-slate-400">{label}</p><p className="mt-1 text-lg font-extrabold">{value}</p></div>)}
             </section>
