@@ -14,32 +14,58 @@ function pacePerKm(durationSeconds, distanceMeters) {
   const sec = Math.round(s / (m / 1000));
   return Number.isFinite(sec) && sec > 0 && sec <= 3600 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}/km` : null;
 }
-
+function daysSince(date) { if (!date) return null; const t = Date.parse(date); return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : null; }
+function normalizeQuestion(question) { return String(question || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); }
+function latestSessions(sessions) { return sessions.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))); }
+function metricDistance(s) { return Number(s?.wearable?.distanceKm) || (Number(s?.wearable?.distanceMeters) > 0 ? Number(s.wearable.distanceMeters) / 1000 : null); }
+function metricDuration(s) { return Number(s?.wearable?.durationSeconds) || (Number(s?.duration) > 0 ? Number(s.duration) * 60 : null); }
+function localCoachAnswer(question, data) {
+  const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+  const q = normalizeQuestion(question);
+  const diagnosis = diagnoseBomberProgress(sessions);
+  const sorted = latestSessions(sessions);
+  const focus = diagnosis.priority ? LABELS[diagnosis.priority] || diagnosis.priority : 'pendent de més dades';
+  const recent = sorted.slice(0, 8);
+  const has = (...terms) => terms.some(t => q.includes(t));
+  if (has('hola', 'bon dia', 'bona tarda', 'bona nit', 'ei', 'hey')) return `### Hola!\n\nSoc el **Bomber Coach**. Tinc les teves dades disponibles i puc analitzar el teu entrenament.\n\nAra mateix la prioritat detectada és **${focus}**.\n\nPregunta'm, per exemple, si has millorat, què hauries d'entrenar avui, quina ha estat la teva millor sessió o com vas respecte als teus objectius.`;
+  if (has('com vaig', 'com estic', 'estat actual', 'preparacio', 'preparació')) {
+    const rows = diagnosis.tests.map(t => `• **${t.label}**: ${t.readiness?.progress ?? 0}%${t.latestTimeSeconds ? ` · últim registre ${Math.round(t.latestTimeSeconds)} s` : ' · sense registre'}`).join('\n');
+    return `### Com vas?\n\n**Prioritat actual:** ${focus}.\n\n${rows || 'Encara no hi ha prou dades per valorar les proves.'}`;
+  }
+  if (has('millorar', 'punts febles', 'feble', 'prioritat')) return `### Què milloraria primer\n\n**${focus}**.\n\nLa prioritat es basa en les dades registrades i en els objectius disponibles. No considero una prova feble només perquè falti informació.`;
+  if (has('que faig avui', 'què faig avui', 'entreno avui', 'entrenar avui', 'avui')) return `### Entrenament d'avui\n\n**Focus:** ${focus}.\n\n1. Escalfament 8–10 min.\n2. Treball específic de la prioritat.\n3. Registra temps, repeticions i penalitzacions.\n4. Recuperació i mobilitat.\n\nSi avui ja tens una sessió registrada, explica'm el resultat i adapto la següent.`;
+  if (has('evolucion', 'evolució', 'millorat', 'milloro', 'millora', 'tendencia', 'tendència')) {
+    if (!recent.length) return '### Evolució\n\nEncara no hi ha sessions registrades suficients per valorar una tendència.';
+    return `### Evolució recent\n\n${recent.map(s => { const d = metricDistance(s); const dur = metricDuration(s); const pace = pacePerKm(s.wearable?.durationSeconds, s.wearable?.distanceMeters); const hr = s.wearable?.heartRate?.average; return `• **${s.date || 'Sense data'}** — ${LABELS[s.type] || s.type || 'Activitat'}${dur ? ` · ${Math.floor(dur / 60)}:${String(Math.round(dur % 60)).padStart(2, '0')}` : ''}${d ? ` · ${d.toFixed(2)} km` : ''}${pace ? ` · ${pace}` : ''}${hr ? ` · FC ${Math.round(hr)} bpm` : ''}`; }).join('\n')}\n\nLa tendència és més fiable comparant diverses sessions, no una sola marca.`;
+  }
+  if (has('millor activitat', 'millor sessio', 'millor sessió', 'record')) {
+    const withScore = sorted.filter(s => Number.isFinite(Number(s.points)));
+    if (!withScore.length) return '### Millor activitat\n\nEncara no tinc puntuacions suficients per determinar-la.';
+    const best = withScore.slice().sort((a, b) => Number(b.points) - Number(a.points))[0];
+    return `### Millor activitat\n\n**${LABELS[best.type] || best.type || 'Activitat'}** · ${best.points} punts · ${best.date || 'sense data'}.`;
+  }
+  if (has('quant fa', 'fa quant', 'ultim', 'últim', 'temps que no', 'dies que no')) {
+    const types = ['estructural', 'forestal', 'aquatic', 'pressbanca', 'cames'];
+    return `### Temps des de l'últim entrenament\n\n${types.map(type => { const row = sessions.filter(s => s.type === type).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0]; const days = daysSince(row?.date); return `• **${LABELS[type]}**: ${days === null ? 'mai registrat' : `fa ${days} dies`}`; }).join('\n')}`;
+  }
+  if (has('fc', 'freqüencia cardiaca', 'frequencia cardiaca', 'pulsacions', 'batecs')) {
+    const rows = sorted.filter(s => Number(s.wearable?.heartRate?.average) > 0).slice(0, 5);
+    if (!rows.length) return '### Freqüència cardíaca\n\nNo tinc dades de FC disponibles en les sessions recents.';
+    return `### Freqüència cardíaca\n\n${rows.map(s => `• ${s.date || 'Sense data'} — FC mitjana **${Math.round(s.wearable.heartRate.average)} bpm**${s.wearable.heartRate.max ? ` · màxima ${Math.round(s.wearable.heartRate.max)} bpm` : ''}`).join('\n')}`;
+  }
+  if (has('correr', 'córrer', 'ritme', 'km', 'distancia', 'distància', 'corrent')) {
+    const rows = sorted.filter(s => metricDistance(s) && metricDuration(s)).slice(0, 5);
+    if (!rows.length) return '### Activitats de resistència\n\nNo tinc prou activitats sincronitzades amb distància i temps per calcular el ritme.';
+    return `### Activitats recents\n\n${rows.map(s => { const d = metricDistance(s), dur = metricDuration(s), pace = pacePerKm(dur, d * 1000); return `• ${s.date || 'Sense data'} — **${d.toFixed(2)} km** · ${Math.floor(dur / 60)}:${String(Math.round(dur % 60)).padStart(2, '0')} · **${pace || 'ritme no disponible'}**`; }).join('\n')}`;
+  }
+  return `### Anàlisi local\n\nHe revisat les dades disponibles de Bomber Trainer. La prioritat detectada és **${focus}**.\n\nPuc analitzar el teu progrés, punts febles, evolució, entrenaments recents, distància, ritme, FC i temps des de l'últim treball. Si em fas una pregunta concreta, buscaré primer la dada corresponent abans de respondre.`;
+}
 function makeContext(data) {
   const diagnosis = diagnoseBomberProgress(data.sessions || []);
-  const sorted = (data.sessions || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const sorted = latestSessions(data.sessions || []);
   const classified = sorted.filter(s => ['forestal', 'estructural', 'aquatic', 'pressbanca', 'cames'].includes(s.type));
   const selected = [...classified, ...sorted.filter(s => !classified.includes(s))].filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i).slice(0, 150);
-  return JSON.stringify({
-    diagnosis,
-    sessions: selected.map((s) => ({
-      id: s.id, type: s.type, classification: s.type, date: s.date, duration: s.duration, points: s.points, penalties: s.penalties, notes: s.notes,
-      data: s.data,
-      wearable: s.wearable ? { source: s.wearable.source, activityId: s.wearable.activityId, activityType: s.wearable.activityType, name: s.wearable.name, durationSeconds: s.wearable.durationSeconds, distanceMeters: s.wearable.distanceMeters, pacePerKm: pacePerKm(s.wearable.durationSeconds, s.wearable.distanceMeters), heartRate: s.wearable.heartRate, calories: s.wearable.calories, trainingLoad: s.wearable.trainingLoad, streamTypes: s.wearable.streamTypes } : undefined,
-    })),
-    weights: data.weights || [], goals: data.goals || [], material: data.material || [], minutes: data.minutes || '',
-  });
-}
-function daysSince(date) { if (!date) return null; const t = Date.parse(date); return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86400000)) : null; }
-function localCoachAnswer(question, data) {
-  const sessions = Array.isArray(data.sessions) ? data.sessions : []; const diagnosis = diagnoseBomberProgress(sessions); const q = String(question || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const latest = sessions.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8); const focus = diagnosis.priority ? LABELS[diagnosis.priority] || diagnosis.priority : 'pendent de més dades';
-  if (q.includes('com vaig')) { const rows = diagnosis.tests.map((t) => { const pct = t.readiness?.progress ?? 0; const mark = t.latestTimeSeconds ? `${Math.round(t.latestTimeSeconds)} s` : 'sense registre'; return `• **${t.label}**: ${pct}% · últim registre: ${mark}`; }).join('\n'); return `### Com vas?\n\n**Prioritat actual:** ${focus}.\n\n${rows}\n\nEl percentatge és orientatiu i només es calcula quan hi ha un objectiu numèric configurat; sense registre és 0%. No faig servir la navette mentre no hi hagi confirmació oficial de les bases.`; }
-  if (q.includes('millorar') || q.includes('punts febles')) return `### Què prioritzaria\n\n**${focus}**.\n\nMira sobretot la distància al teu objectiu, la tendència de les últimes sessions i les penalitzacions. Si hi ha poques dades, no assumiré que una prova és feble sense evidència.`;
-  if (q.includes('que faig avui') || q.includes('què faig avui')) return `### Entrenament d'avui\n\n**Focus:** ${focus}.\n\n1. Escalfament 8–10 min.\n2. Treball específic de la prioritat, sense buscar màxim si vens carregat.\n3. Registra temps, repeticions i penalitzacions.\n4. Recuperació i mobilitat.\n\nLa següent sessió s'ha d'adaptar al resultat d'avui.`;
-  if (q.includes('evolucion') || q.includes('evolució')) return `### Evolució recent\n\n${latest.length ? latest.map(s => `• ${s.date || 'sense data'} — ${LABELS[s.type] || s.type} — ${s.duration ? `${s.duration} min` : ''}${s.penalties ? ` · ${s.penalties} penalitzacions` : ''}${s.wearable?.heartRate?.average ? ` · FC ${Math.round(s.wearable.heartRate.average)} bpm` : ''}${pacePerKm(s.wearable?.durationSeconds, s.wearable?.distanceMeters) ? ` · ritme ${pacePerKm(s.wearable?.durationSeconds, s.wearable?.distanceMeters)}` : ''}`).join('\n') : 'Encara no hi ha sessions registrades.'}\n\nLa tendència s'ha de valorar amb diverses sessions, no amb una sola marca.`;
-  if (q.includes('quant fa') || q.includes('no treballo') || q.includes('ultim') || q.includes('últim')) { const types = ['estructural', 'forestal', 'aquatic', 'pressbanca', 'cames']; return `### Temps des de l'últim entrenament\n\n${types.map(type => { const row = sessions.filter(s => s.type === type).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0]; const days = daysSince(row?.date); return `• **${LABELS[type]}**: ${days === null ? 'mai registrat' : `fa ${days} dies`}`; }).join('\n')}`; }
-  return `### Anàlisi local\n\nHe revisat les dades disponibles de Bomber Trainer. Ara mateix la prioritat detectada és **${focus}**.\n\nPuc analitzar progrés, punts febles, evolució recent, entrenament recomanat i temps des de l'últim treball sense utilitzar cap API.`;
+  return JSON.stringify({ diagnosis, sessions: selected.map(s => ({ id: s.id, type: s.type, classification: s.type, date: s.date, duration: s.duration, points: s.points, penalties: s.penalties, notes: s.notes, data: s.data, wearable: s.wearable ? { source: s.wearable.source, activityId: s.wearable.activityId, activityType: s.wearable.activityType, name: s.wearable.name, durationSeconds: s.wearable.durationSeconds, distanceKm: s.wearable.distanceKm, distanceMeters: s.wearable.distanceMeters, pacePerKm: pacePerKm(s.wearable.durationSeconds, s.wearable.distanceMeters), heartRate: s.wearable.heartRate, calories: s.wearable.calories, trainingLoad: s.wearable.trainingLoad, streamTypes: s.wearable.streamTypes } : undefined })), weights: data.weights || [], goals: data.goals || [], material: data.material || [], minutes: data.minutes || '' });
 }
 
 export default function AiPage() {
