@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import pb from '@/lib/pocketbaseClient';
+import pb from '@/lib/pocketBaseClient';
 
 const STORAGE_KEY = 'bomber-trainer-personal-calendar-v1';
 const WORKOUTS = [
@@ -61,6 +61,16 @@ function sessionLabel(session) {
     return labels[session?.type] || session?.type || 'Sessió';
 }
 
+// Les sessions es guarden en minuts; a la interfície mostrem sempre mm:ss.
+function formatSessionDuration(value) {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes) || minutes <= 0) return 'Sessió registrada';
+    const totalSeconds = Math.round(minutes * 60);
+    const mm = Math.floor(totalSeconds / 60);
+    const ss = totalSeconds % 60;
+    return `${mm}:${String(ss).padStart(2, '0')}`;
+}
+
 export default function PersonalCalendarOverlay() {
     const navigate = useNavigate();
     const [calendar, setCalendar] = useState(() => readCalendar());
@@ -107,7 +117,7 @@ export default function PersonalCalendarOverlay() {
             setShowWorkoutPicker(false);
             setLoadingSessions(true);
             try {
-                const records = await pb.collection('bt_sessions').getFullList({ filter: `date = "${key}"`, sort: '-created' });
+                const records = await pb.collection('bt_sessions').getFullList({ filter: `date = \"${key}\"`, sort: '-created' });
                 setDaySessions(records);
             } catch {
                 setDaySessions([]);
@@ -222,7 +232,7 @@ export default function PersonalCalendarOverlay() {
 
                     <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                         <div className="flex items-center justify-between"><p className="text-sm font-extrabold">Entrenaments registrats aquest dia</p><span className="text-xs font-bold text-slate-400">{daySessions.length}</span></div>
-                        {loadingSessions ? <p className="mt-3 text-xs text-slate-400">Carregant…</p> : daySessions.length === 0 ? <p className="mt-3 text-xs text-slate-400">No hi ha cap sessió registrada. Pots triar un entrenament a dalt.</p> : <div className="mt-3 space-y-2">{daySessions.map((session) => <div key={session.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3"><div><p className="text-sm font-bold">{sessionLabel(session)}</p><p className="text-[11px] text-slate-500">{session.duration ? `${session.duration} min` : 'Sessió registrada'}{session.points ? ` · +${session.points} punts` : ''}</p></div><button type="button" disabled={deletingId === session.id} onClick={() => deleteSession(session)} className="min-h-10 rounded-lg bg-white px-3 text-xs font-extrabold text-red-600 shadow-sm disabled:opacity-50">Eliminar</button></div>)}</div>}
+                        {loadingSessions ? <p className="mt-3 text-xs text-slate-400">Carregant…</p> : daySessions.length === 0 ? <p className="mt-3 text-xs text-slate-400">No hi ha cap sessió registrada. Pots triar un entrenament a dalt.</p> : <div className="mt-3 space-y-2">{daySessions.map((session) => <div key={session.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3"><div><p className="text-sm font-bold">{sessionLabel(session)}</p><p className="text-[11px] text-slate-500">{formatSessionDuration(session.duration)}{session.points ? ` · +${session.points} punts` : ''}</p></div><button type="button" disabled={deletingId === session.id} onClick={() => deleteSession(session)} className="min-h-10 rounded-lg bg-white px-3 text-xs font-extrabold text-red-600 shadow-sm disabled:opacity-50">Eliminar</button></div>)}</div>}
                     </div>
 
                     <div className="mt-5 border-t border-slate-100 pt-4"><p className="text-sm font-extrabold">Percentatges del teu calendari</p><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-2xl bg-green-50 p-3"><p className="text-[11px] font-bold uppercase text-green-700">Entrenament</p><p className="text-2xl font-extrabold text-green-700">{trainingPct}%</p><p className="text-[11px] text-slate-500">{answeredTraining} dies marcats</p></div><div className="rounded-2xl bg-amber-50 p-3"><p className="text-[11px] font-bold uppercase text-amber-700">Alimentació</p><p className="text-2xl font-extrabold text-amber-700">{nutritionPct}%</p><p className="text-[11px] text-slate-500">{answeredNutrition} dies marcats</p></div></div><p className="mt-2 text-[11px] text-slate-400">El percentatge només compta els dies que has marcat; els dies buits no et penalitzen.</p></div>
