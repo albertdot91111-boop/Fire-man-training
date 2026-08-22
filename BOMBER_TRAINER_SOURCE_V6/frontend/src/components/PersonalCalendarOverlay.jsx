@@ -61,7 +61,7 @@ function sessionLabel(session) {
     return labels[session?.type] || session?.type || 'Sessió';
 }
 
-// Les sessions es guarden en minuts; a la interfície mostrem sempre mm:ss.
+// Les sessions manuals es guarden en minuts; wearable.durationSeconds ja són segons.
 function formatSessionDuration(value) {
     const minutes = Number(value);
     if (!Number.isFinite(minutes) || minutes <= 0) return 'Sessió registrada';
@@ -69,6 +69,37 @@ function formatSessionDuration(value) {
     const mm = Math.floor(totalSeconds / 60);
     const ss = totalSeconds % 60;
     return `${mm}:${String(ss).padStart(2, '0')}`;
+}
+
+function metricNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function sessionMetrics(session) {
+    const wearable = session?.wearable;
+    const wearableSeconds = metricNumber(wearable?.durationSeconds);
+    const distanceKm = metricNumber(wearable?.distanceKm) || (metricNumber(wearable?.distanceMeters) ? metricNumber(wearable.distanceMeters) / 1000 : null);
+    const heartRate = wearable?.heartRate && typeof wearable.heartRate === 'object' ? wearable.heartRate : {};
+    const heartAverage = metricNumber(heartRate.average);
+    const paceSeconds = wearableSeconds && distanceKm ? wearableSeconds / distanceKm : null;
+    const pace = paceSeconds && paceSeconds > 0 && paceSeconds <= 3600
+        ? `${Math.floor(paceSeconds / 60)}:${String(Math.round(paceSeconds % 60)).padStart(2, '0')}/km`
+        : null;
+    if (!wearable || (!wearableSeconds && !distanceKm && !heartAverage && !metricNumber(heartRate.max))) return null;
+    return {
+        duration: wearableSeconds ? formatSeconds(wearableSeconds) : null,
+        distance: distanceKm ? `${distanceKm.toFixed(2)} km` : null,
+        pace,
+        heartAverage: heartAverage ? `${Math.round(heartAverage)} bpm` : null,
+    };
+}
+
+function formatSeconds(value) {
+    const n = metricNumber(value);
+    if (!n) return '—';
+    const whole = Math.round(n);
+    return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
 export default function PersonalCalendarOverlay() {
@@ -232,7 +263,7 @@ export default function PersonalCalendarOverlay() {
 
                     <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                         <div className="flex items-center justify-between"><p className="text-sm font-extrabold">Entrenaments registrats aquest dia</p><span className="text-xs font-bold text-slate-400">{daySessions.length}</span></div>
-                        {loadingSessions ? <p className="mt-3 text-xs text-slate-400">Carregant…</p> : daySessions.length === 0 ? <p className="mt-3 text-xs text-slate-400">No hi ha cap sessió registrada. Pots triar un entrenament a dalt.</p> : <div className="mt-3 space-y-2">{daySessions.map((session) => <div key={session.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3"><div><p className="text-sm font-bold">{sessionLabel(session)}</p><p className="text-[11px] text-slate-500">{formatSessionDuration(session.duration)}{session.points ? ` · +${session.points} punts` : ''}</p></div><button type="button" disabled={deletingId === session.id} onClick={() => deleteSession(session)} className="min-h-10 rounded-lg bg-white px-3 text-xs font-extrabold text-red-600 shadow-sm disabled:opacity-50">Eliminar</button></div>)}</div>}
+                        {loadingSessions ? <p className="mt-3 text-xs text-slate-400">Carregant…</p> : daySessions.length === 0 ? <p className="mt-3 text-xs text-slate-400">No hi ha cap sessió registrada. Pots triar un entrenament a dalt.</p> : <div className="mt-3 space-y-2">{daySessions.map((session) => { const metrics = sessionMetrics(session); return <div key={session.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3"><div><p className="text-sm font-bold">{sessionLabel(session)}</p><p className="text-[11px] text-slate-500">{metrics ? [metrics.duration, metrics.distance, metrics.pace, metrics.heartAverage].filter(Boolean).join(' · ') : formatSessionDuration(session.duration)}{session.points ? ` · +${session.points} punts` : ''}</p></div><button type="button" disabled={deletingId === session.id} onClick={() => deleteSession(session)} className="min-h-10 rounded-lg bg-white px-3 text-xs font-extrabold text-red-600 shadow-sm disabled:opacity-50">Eliminar</button></div>; })}</div>}
                     </div>
 
                     <div className="mt-5 border-t border-slate-100 pt-4"><p className="text-sm font-extrabold">Percentatges del teu calendari</p><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-2xl bg-green-50 p-3"><p className="text-[11px] font-bold uppercase text-green-700">Entrenament</p><p className="text-2xl font-extrabold text-green-700">{trainingPct}%</p><p className="text-[11px] text-slate-500">{answeredTraining} dies marcats</p></div><div className="rounded-2xl bg-amber-50 p-3"><p className="text-[11px] font-bold uppercase text-amber-700">Alimentació</p><p className="text-2xl font-extrabold text-amber-700">{nutritionPct}%</p><p className="text-[11px] text-slate-500">{answeredNutrition} dies marcats</p></div></div><p className="mt-2 text-[11px] text-slate-400">El percentatge només compta els dies que has marcat; els dies buits no et penalitzen.</p></div>
