@@ -46,8 +46,10 @@ export default function MaintenancePage() {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [openGroups, setOpenGroups] = useState(() => Object.fromEntries(GROUPS.map((group, index) => [group.title, index === 0])));
 
   const update = (name, field, value) => setValues((prev) => ({ ...prev, [name]: { ...prev[name], [field]: value } }));
+  const toggleGroup = (title) => setOpenGroups((prev) => ({ ...prev, [title]: !prev[title] }));
 
   const save = async () => {
     setSaving(true); setError('');
@@ -83,17 +85,23 @@ export default function MaintenancePage() {
       <div className="mt-3 grid grid-cols-4 gap-2">{[5, 10, 15, 20].map((min) => <button key={min} type="button" onClick={() => setDuration(String(min))} className={`min-h-[52px] rounded-2xl text-sm font-extrabold ${Number(duration) === min ? 'bg-yellow-400 text-slate-900' : 'bg-slate-100 text-slate-700'}`}>{min} MIN</button>)}</div>
     </section>
     <div className="mt-4 space-y-5">
-      {GROUPS.map((group) => <section key={group.title}>
-        <div className="mb-3"><h2 className="text-lg font-extrabold text-slate-900">{group.title}</h2><p className="text-sm text-slate-500">{group.subtitle}</p></div>
-        <div className="space-y-3">{group.exercises.map(([name, detail]) => <div key={name} className="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3"><div><h3 className="font-extrabold text-slate-900">{name}</h3><p className="text-xs text-slate-500">{detail}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">opcional</span></div>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <label className="grid gap-1 text-xs font-bold text-slate-500">Pes kg<input type="number" min="0" step="0.5" value={values[name].weight} onChange={(e) => update(name, 'weight', e.target.value)} placeholder="—" className="min-h-[48px] rounded-xl border border-slate-300 px-3 text-base font-bold" /></label>
-            <label className="grid gap-1 text-xs font-bold text-slate-500">Repeticions<input type="number" min="0" value={values[name].value} onChange={(e) => update(name, 'value', e.target.value)} placeholder="—" className="min-h-[48px] rounded-xl border border-slate-300 px-3 text-base font-bold" /></label>
-            <label className="grid gap-1 text-xs font-bold text-slate-500">Temps<input type="text" inputMode="decimal" value={values[name].time} onChange={(e) => update(name, 'time', e.target.value)} placeholder="—" className="min-h-[48px] rounded-xl border border-slate-300 px-3 text-base font-bold" /></label>
-          </div>
-        </div>)}</div>
-      </section>)}
+      {GROUPS.map((group) => {
+        const isOpen = Boolean(openGroups[group.title]);
+        return <section key={group.title} className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 shadow-sm">
+          <button type="button" onClick={() => toggleGroup(group.title)} aria-expanded={isOpen} className="flex w-full items-center justify-between gap-3 p-5 text-left">
+            <div><h2 className="text-lg font-extrabold text-slate-900">{group.title}</h2><p className="text-sm text-slate-500">{group.subtitle}</p></div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl font-bold text-slate-700 shadow-sm">{isOpen ? '−' : '+'}</span>
+          </button>
+          {isOpen && <div className="space-y-3 border-t border-slate-200 p-4">{group.exercises.map(([name, detail]) => <div key={name} className="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3"><div><h3 className="font-extrabold text-slate-900">{name}</h3><p className="text-xs text-slate-500">{detail}</p></div><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">opcional</span></div>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <label className="grid gap-1 text-xs font-bold text-slate-500">Pes kg<input type="number" min="0" step="0.5" value={values[name].weight} onChange={(e) => update(name, 'weight', e.target.value)} placeholder="—" className="min-h-[48px] rounded-xl border border-slate-300 px-3 text-base font-bold" /></label>
+              <label className="grid gap-1 text-xs font-bold text-slate-500">Repeticions<input type="number" min="0" value={values[name].value} onChange={(e) => update(name, 'value', e.target.value)} placeholder="—" className="min-h-[48px] rounded-xl border border-slate-300 px-3 text-base font-bold" /></label>
+              <label className="grid gap-1 text-xs font-bold text-slate-500">Temps<input type="text" inputMode="decimal" value={values[name].time} onChange={(e) => update(name, 'time', e.target.value)} placeholder="—" className="min-h-[48px] rounded-xl border border-slate-300 px-3 text-base font-bold" /></label>
+            </div>
+          </div>)}</div>}
+        </section>;
+      })}
     </div>
     <section className="mt-5 rounded-3xl bg-white border border-slate-200 p-4"><label className="grid gap-1 text-sm font-bold text-slate-700">Notes<textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Com t'ha anat?" className="min-h-[90px] rounded-xl border border-slate-300 p-3" /></label></section>
     {error && <div className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-bold text-red-700">{error}</div>}
