@@ -148,19 +148,36 @@ export function parseSeries(value) {
 }
 
 export function maintenanceEvolution(sessions) {
-    return sessions.filter((s) => s.type === 'manteniment').flatMap((s) => {
+    const byExercise = {};
+    sessions.filter((s) => s.type === 'manteniment').forEach((s) => {
         const data = Array.isArray(s.data) ? s.data : [];
-        const exerciseEntries = data.filter((item) => item.exercici && item.exercici !== 'Bloc de manteniment')
-            .map((item) => ({ exercici: item.exercici, values: parseSeries(item.series ?? item.reps ?? item.temps) }))
-            .filter((item) => item.values.length);
-        if (exerciseEntries.length) {
-            const values = exerciseEntries.flatMap((item) => item.values);
-            return [{ date: s.date, values, total: values.reduce((sum, value) => sum + value, 0), entries: exerciseEntries }];
+        data.filter((item) => item?.exercici && item.exercici !== 'Bloc de manteniment').forEach((item) => {
+            const name = String(item.exercici).trim();
+            const reps = Number(item.repeticions ?? item.reps);
+            const weight = Number(item.llastKg ?? item.pes);
+            const time = String(item.temps ?? '').trim();
+            if (!byExercise[name]) byExercise[name] = [];
+            if ((Number.isFinite(weight) && weight > 0) || (Number.isFinite(reps) && reps > 0) || time) {
+                byExercise[name].push({ date: s.date, weight: weight > 0 ? weight : null, reps: reps > 0 ? reps : null, time: time || null });
+            }
+        });
+        const legacy = data.find((item) => item?.exercici === 'Bloc de manteniment');
+        if (legacy) {
+            const values = parseSeries(legacy.series ?? legacy.reps ?? legacy.temps);
+            if (values.length) {
+                if (!byExercise.Manteniment) byExercise.Manteniment = [];
+                byExercise.Manteniment.push({ date: s.date, weight: null, reps: values.reduce((a, b) => a + b, 0), time: null });
+            }
         }
-        const legacyEntry = data.find((item) => item.exercici === 'Bloc de manteniment');
-        const legacyValues = parseSeries(legacyEntry?.series ?? legacyEntry?.temps);
-        return legacyValues.length ? [{ date: s.date, values: legacyValues, total: legacyValues.reduce((sum, value) => sum + value, 0), entries: [{ exercici: 'Manteniment', values: legacyValues }] }] : [];
-    }).sort((a, b) => a.date.localeCompare(b.date));
+    });
+    return Object.entries(byExercise).map(([exercici, history]) => {
+        const sorted = history.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+        const last = sorted.at(-1) || null;
+        const previous = sorted.length > 1 ? sorted.at(-2) : null;
+        const bestWeight = Math.max(0, ...sorted.map((x) => x.weight || 0));
+        const bestReps = Math.max(0, ...sorted.map((x) => x.reps || 0));
+        return { exercici, history: sorted, last, previous, bestWeight: bestWeight || null, bestReps: bestReps || null };
+    }).sort((a, b) => a.exercici.localeCompare(b.exercici));
 }
 
 export function streak(sessions) {
