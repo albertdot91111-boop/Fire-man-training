@@ -120,6 +120,29 @@ function physicalProgress(sessions, type) {
     return Math.round(Math.max(0, Math.min(100, (1 - (latest - target) / target) * 100)));
 }
 
+function metricNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function latestWearableSummary(sessions) {
+    const session = sessions.find((s) => s?.wearable && metricNumber(s.wearable.durationSeconds));
+    if (!session) return null;
+    const w = session.wearable;
+    const duration = metricNumber(w.durationSeconds);
+    const distanceKm = metricNumber(w.distanceKm) || (metricNumber(w.distanceMeters) ? metricNumber(w.distanceMeters) / 1000 : null);
+    const heartAverage = metricNumber(w.heartRate?.average);
+    const paceSeconds = duration && distanceKm ? duration / distanceKm : null;
+    const pace = paceSeconds && paceSeconds <= 3600 ? `${Math.floor(paceSeconds / 60)}:${String(Math.round(paceSeconds % 60)).padStart(2, '0')}/km` : null;
+    const mm = Math.floor(duration / 60); const ss = Math.round(duration % 60);
+    return { date: String(session.date || '').slice(0, 10), text: [
+        `${mm}:${String(ss).padStart(2, '0')}`,
+        distanceKm ? `${distanceKm.toFixed(2)} km` : null,
+        pace,
+        heartAverage ? `FC ${Math.round(heartAverage)} bpm` : null,
+    ].filter(Boolean).join(' · ') };
+}
+
 export default function HomePage() {
     const [sessions, setSessions] = useState([]);
     const [coachPrompt, setCoachPrompt] = useState(null);
@@ -155,6 +178,7 @@ export default function HomePage() {
     const openCoachManually = () => { setManualCoachOpen(true); setCoachPrompt({ kind: 'manual', state: getTodayCoachState() }); };
     const diagnosis = useMemo(() => diagnoseBomberProgress(sessions), [sessions]);
     const points = totalPoints(sessions); const level = levelFor(points); const weak = useMemo(() => weakPoints(sessions), [sessions]); const currentStreak = streak(sessions); const motivation = MOTIVATION[sessions.length % MOTIVATION.length];
+    const wearableSummary = useMemo(() => latestWearableSummary(sessions), [sessions]);
     const progressByType = useMemo(() => {
         const map = {};
         diagnosis.tests.forEach((test) => { map[test.type] = test.readiness?.progress ?? null; });
@@ -180,7 +204,7 @@ export default function HomePage() {
             {hasTodayTraining && <section className="rounded-3xl border border-green-200 bg-green-50 p-5 shadow-sm"><p className="text-xs font-bold tracking-[0.18em] text-green-700">AVUI FET</p><h2 className="mt-1 text-xl font-extrabold">🔥 Molt bé. Sessió registrada.</h2><p className="mt-2 text-sm font-medium text-slate-700">{currentStreak > 1 ? `Ratxa activa: ${currentStreak} dies seguits. No la trenquis.` : 'Primera passa feta. Demà tornem-hi.'}</p></section>}
             <section className="grid grid-cols-3 gap-3" aria-label="Resum de progrés">{[['PUNTS', points], ['RATXA', `${currentStreak} d`], ['NIVELL', level.name]].map(([label, value]) => <div key={label} className="rounded-3xl bg-white border border-slate-200 p-4 text-center shadow-sm"><p className="text-xs font-bold tracking-widest text-slate-400">{label}</p><p className="mt-1 text-lg font-extrabold">{value}</p></div>)}</section>
             <section aria-labelledby="today-actions-heading"><div className="mb-3"><p className="text-xs font-bold tracking-[0.18em] text-slate-400">PUNT DE PARTIDA</p><h2 id="today-actions-heading" className="mt-1 text-xl font-extrabold tracking-tight">Tria una acció per començar</h2></div><div className="grid gap-3 sm:grid-cols-2">{TODAY_ACTIONS.map(({ label, to, type, detail }) => { const t = TYPES[type]; const pct = progressByType[type]; const showProgress = ['estructural', 'forestal', 'aquatic', 'pressbanca'].includes(type); return <Link key={to} to={to} aria-label={label} data-testid={`link-today-action-${type}`} className="group flex min-h-[112px] flex-col justify-between rounded-3xl border border-black/5 p-5 text-left shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}><div className="flex items-start justify-between gap-3"><p className="text-lg font-extrabold leading-tight tracking-tight">{label}</p>{showProgress && <span className="shrink-0 rounded-full bg-white/80 px-3 py-1 text-sm font-extrabold" style={{ color: t.color }}>{pct === null || pct === undefined ? '—' : `${pct}%`}</span>}</div><p className="mt-3 text-xs font-semibold" style={{ color: t.color }}>{detail}</p>{showProgress && pct !== null && pct !== undefined && <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/70"><div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: t.color }} /></div>}</Link>; })}</div></section>
-            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><div className="flex items-end justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">RESUM</p><p className="text-xl font-extrabold">La teva preparació</p></div><div className="text-right"><p className="text-xs font-bold tracking-widest text-slate-400">SESSIONS</p><p className="text-xl font-extrabold">{sessions.length}</p></div></div><p className="mt-3 text-sm font-medium text-slate-600">{motivation}</p></section>
+            <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><div className="flex items-end justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">RESUM</p><p className="text-xl font-extrabold">La teva preparació</p></div><div className="text-right"><p className="text-xs font-bold tracking-widest text-slate-400">SESSIONS</p><p className="text-xl font-extrabold">{sessions.length}</p></div></div><p className="mt-3 text-sm font-medium text-slate-600">{motivation}</p>{wearableSummary && <p className="mt-2 text-xs font-semibold text-slate-500">Última activitat sincronitzada ({wearableSummary.date}): {wearableSummary.text}</p>}</section>
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Punts febles detectats</h2>{weak.length === 0 ? <p className="mt-2 text-sm text-slate-500">Tot treballat aquesta setmana. Continua acumulant feina útil.</p> : <ul className="mt-3 space-y-2">{weak.map((w) => <li key={w.type} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3"><span className="font-semibold">{TYPES[w.type].label}</span><span className="text-sm text-slate-500">{w.days === null ? 'mai registrat' : `fa ${w.days} dies`}</span></li>)}</ul>}</section>
         </AppShell>
     );
