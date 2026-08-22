@@ -62,9 +62,9 @@ export const PHYSICAL_BAREMS = {
     aquatic: { 0: 280, 1: 270, 2: 260, 3: 250, 4: 240, 5: 230, 6: 220, 7: 210, 8: 205, 9: 200, 10: 190 },
 };
 
-// Barem provisional actual de press banca: 65 kg + 12 repeticions + 45 s = 10.
+// Barem provisional actual de press banca: 65 kg + 20 repeticions + 45 s = 10.
 // Menys temps és millor. La nota final és el mínim de pes, repeticions i temps.
-export const PRESS_BENCH_TARGET = { weightKg: 65, reps: 12, timeSeconds: 45 };
+export const PRESS_BENCH_TARGET = { weightKg: 65, reps: 20, timeSeconds: 45 };
 
 export function formatTime(totalSeconds) {
     const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
