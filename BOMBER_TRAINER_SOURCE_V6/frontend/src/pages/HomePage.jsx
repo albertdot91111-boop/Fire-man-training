@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Helmet from 'react-helmet';
 import { Link, useNavigate } from 'react-router-dom';
-import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
-import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints, today } from '@/lib/btData';
+import pb from '@/lib/pocketbaseClient';
+import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints, today, gradeForBench } from '@/lib/btData';
 import { diagnoseBomberProgress } from '@/aiEngine';
 import { COACH_OPTIONS, chooseCoachOption, getCoachMotivation, getTodayCoachState, markCoachCompleted, markCoachUnavailable, nextCoachCheckMs, requestCoachNotifications, shouldCoachPrompt, showCoachNotification } from '@/lib/dailyCoachReminder';
 
@@ -16,35 +16,28 @@ const TODAY_ACTIONS = [
     { label: '⏸️ AVUI NO PUC ENTRENAR', to: '/entrena/descans', type: 'descans', detail: 'Registra el dia' },
 ];
 
-// Una sessió parcial serveix per a gràfiques/evolució, però no entra al % principal.
 const PRESS_BENCH_TARGET_KG = 65;
 const PRESS_BENCH_TARGET_REPS = 20;
 
-function isCompleteBenchSession(session) {
-    if (String(session?.type || '').trim().toLowerCase() !== 'pressbanca') return false;
-    const data = Array.isArray(session?.data) ? session.data : [];
-    const entry = data.find((e) => String(e?.exercici || '').trim().toLowerCase() === 'press banca');
-    if (!entry) return false;
-    const weight = Number(entry.pes);
-    const reps = Number(entry.reps ?? entry.repeticions);
-    const series = Number(entry.series);
-    return Number.isFinite(weight) && weight > 0 && Number.isFinite(reps) && reps > 0 && Number.isFinite(series) && series > 0;
-}
-
+// El % exterior utilitza exactament el mateix barem que la pantalla de Press banca.
 function benchProgress(sessions) {
-    const complete = sessions.filter(isCompleteBenchSession);
-    if (!complete.length) return null;
-    const values = complete.flatMap((s) => (Array.isArray(s.data) ? s.data : [])
-        .filter((e) => String(e?.exercici || '').trim().toLowerCase() === 'press banca')
-        .map((e) => ({ weight: Number(e.pes) || 0, reps: Number(e.reps ?? e.repeticions) || 0 })));
+    const values = sessions.flatMap((s) => {
+        if (String(s?.type || '').trim().toLowerCase() !== 'pressbanca') return [];
+        return (Array.isArray(s.data) ? s.data : [])
+            .filter((e) => String(e?.exercici || '').trim().toLowerCase() === 'press banca')
+            .map((e) => ({
+                weight: Number(e.pes) || 0,
+                reps: Number(e.reps ?? e.repeticions) || 0,
+                timeSeconds: Number(e.temps) || 0,
+            }))
+            .filter((e) => e.weight > 0 && e.reps > 0 && e.timeSeconds > 0);
+    });
     if (!values.length) return null;
-    const best = values.reduce((a, b) => {
-        const aScore = Math.min(a.weight / PRESS_BENCH_TARGET_KG, a.reps / PRESS_BENCH_TARGET_REPS);
-        const bScore = Math.min(b.weight / PRESS_BENCH_TARGET_KG, b.reps / PRESS_BENCH_TARGET_REPS);
-        return bScore > aScore ? b : a;
-    }, values[0]);
-    return Math.round(Math.max(0, Math.min(100,
-        Math.min((best.weight / PRESS_BENCH_TARGET_KG) * 100, (best.reps / PRESS_BENCH_TARGET_REPS) * 100))));
+    const scored = values.map((value) => ({ ...value, grade: gradeForBench(value.weight, value.reps, value.timeSeconds) }))
+        .filter((value) => Number.isFinite(value.grade));
+    if (!scored.length) return null;
+    const best = scored.reduce((a, b) => b.grade > a.grade ? b : a, scored[0]);
+    return Math.round(Math.max(0, Math.min(100, best.grade * 10)));
 }
 
 const STRUCTURAL_EXERCISES = [
@@ -99,10 +92,7 @@ function isCompleteAquaticSession(session) {
     return isCompleteTimedSession(session, 'aquatic', AQUATIC_EXERCISES);
 }
 
-// Estructural i aquàtica segueixen ara exactament la mateixa regla que forestal:
-// parcial = gràfica/evolució; completa = pot entrar al % principal.
 function physicalProgress(sessions, type) {
-    // Referències orientatives del projecte, no barems oficials.
     const targets = { estructural: 130, forestal: 190, aquatic: 190 };
     const target = targets[type];
     if (!target) return null;
