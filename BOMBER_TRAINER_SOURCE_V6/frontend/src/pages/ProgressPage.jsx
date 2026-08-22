@@ -100,7 +100,11 @@ function structuralCompleteSeries(sessions) {
 }
 
 function timeSeries(sessions, type) {
-    return sessions.filter((s) => s.type === type).map((s) => ({ date: String(s.date || '').slice(5, 10), fullDate: String(s.date || '').slice(0, 10), seconds: storedSeconds(s.duration) * 60 })).filter((x) => x.seconds > 0).sort((a, b) => a.fullDate.localeCompare(b.fullDate)).slice(-12).map((item, index) => ({ ...item, pointLabel: `${item.date} · #${index + 1}` }));
+    return sessions.filter((s) => s.type === type).map((s) => {
+        // s.duration es guarda en minuts; storedSeconds ja el converteix a segons.
+        const seconds = storedSeconds(s.duration);
+        return { date: String(s.date || '').slice(5, 10), fullDate: String(s.date || '').slice(0, 10), seconds };
+    }).filter((x) => x.seconds > 0).sort((a, b) => a.fullDate.localeCompare(b.fullDate)).slice(-12).map((item, index) => ({ ...item, pointLabel: `${item.date} · #${index + 1}` }));
 }
 
 function pressBenchSeries(sessions) {
