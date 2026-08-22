@@ -77,6 +77,7 @@ function metricNumber(value) {
 }
 
 function sessionMetrics(session) {
+    if (Array.isArray(session?.data) && session.data.length > 0) return null;
     const wearable = session?.wearable;
     const wearableSeconds = metricNumber(wearable?.durationSeconds);
     const distanceKm = metricNumber(wearable?.distanceKm) || (metricNumber(wearable?.distanceMeters) ? metricNumber(wearable.distanceMeters) / 1000 : null);
