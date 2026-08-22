@@ -1,5 +1,4 @@
 export const TYPES = {
-    cames: { key: 'cames', label: 'Cames', short: 'CAMES', color: '#16a34a', soft: '#dcfce7' },
     estructural: { key: 'estructural', label: 'Incendi estructural', short: 'ESTRUCTURAL', color: '#dc2626', soft: '#fee2e2' },
     forestal: { key: 'forestal', label: 'Incendi forestal', short: 'FORESTAL', color: '#ea580c', soft: '#ffedd5' },
     aquatic: { key: 'aquatic', label: 'Prova aquàtica', short: 'AQUÀTICA', color: '#0284c7', soft: '#e0f2fe' },
@@ -15,13 +14,6 @@ export const MATERIAL = [
 ];
 
 export const PLANS = {
-    cames: [
-        { name: 'Sentadilla', detail: '5 sèries', fields: ['pes', 'reps'] },
-        { name: 'Pes mort', detail: '4 sèries', fields: ['pes', 'reps'] },
-        { name: 'Gambades', detail: '3 sèries per cama', fields: ['pes', 'reps'] },
-        { name: 'Step-up al box', detail: '3 sèries', fields: ['pes', 'reps'] },
-        { name: 'Bessons', detail: '3 sèries', fields: ['pes', 'reps'] },
-    ],
     estructural: [
         { name: '1. Discos (transport)', detail: '2 discos de 10 kg · equilibri + 10 step-ups', fields: ['temps', 'descans'] },
         { name: '2. Kettlebells', detail: '2 kettlebells de 16 kg · configuració fixa del projecte', fields: ['temps', 'descans'] },
@@ -48,14 +40,14 @@ export const PLANS = {
         { name: 'Dominades', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
         { name: 'Flexions', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
         { name: 'Planxa / abdominals', detail: 'Segons o repeticions per sèrie · tria planxa o abdominals', fields: ['series'] },
-        { name: 'Sentadilles', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
-        { name: 'Gambades', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
+        { name: 'Sentadilla', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
+        { name: 'Pes mort', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
     ],
     rapid: [
         { name: 'Circuit ràpid', detail: 'Adaptat als minuts disponibles', fields: ['temps'] },
     ],
     pressbanca: [
-        { name: 'Press banca', detail: 'Registra pes, repeticions i sèries', fields: ['pes', 'reps', 'series', 'descans'] },
+        { name: 'Press banca', detail: 'Registra pes, repeticions i temps de la prova', fields: ['pes', 'reps', 'temps'] },
     ],
     descans: [],
 };
@@ -64,14 +56,15 @@ export const INCIDENTS = ['Caiguda', 'Fatiga', 'Dolor', 'Material insuficient', 
 export const POINTS = { complet: 100, manteniment: 40, minim: 20 };
 
 // Barem PROVISIONAL propi de Bomber Trainer. Es substituirà quan surtin les bases.
-// Temps: com menys temps, millor. 10 = objectiu acordat.
 export const PHYSICAL_BAREMS = {
     forestal: { 0: 280, 1: 270, 2: 260, 3: 250, 4: 240, 5: 230, 6: 220, 7: 210, 8: 205, 9: 200, 10: 190 },
     estructural: { 0: 230, 1: 220, 2: 210, 3: 200, 4: 190, 5: 180, 6: 170, 7: 160, 8: 150, 9: 140, 10: 130 },
     aquatic: { 0: 280, 1: 270, 2: 260, 3: 250, 4: 240, 5: 230, 6: 220, 7: 210, 8: 205, 9: 200, 10: 190 },
 };
 
-export const PRESS_BENCH_BAREM = { 0: 0, 1: 5, 2: 7, 3: 9, 4: 11, 5: 13, 6: 14, 7: 15, 8: 16, 9: 18, 10: 20 };
+// Barem provisional actual de press banca: 65 kg + 12 repeticions + 45 s = 10.
+// Menys temps és millor. La nota final és el mínim de pes, repeticions i temps.
+export const PRESS_BENCH_TARGET = { weightKg: 65, reps: 12, timeSeconds: 45 };
 
 export function formatTime(totalSeconds) {
     const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
@@ -118,23 +111,19 @@ export function gradeForTime(type, totalSeconds) {
     return 0;
 }
 
-export function gradeForBench(weight, reps) {
+export function gradeForBench(weight, reps, timeSeconds) {
     const kg = Number(weight) || 0;
     const repetitions = Number(reps) || 0;
+    const time = Number(timeSeconds);
     if (kg <= 0 || repetitions <= 0) return null;
-    const repGrades = Object.keys(PRESS_BENCH_BAREM).map(Number).sort((a, b) => a - b);
-    const repScore = repetitions >= 20 ? 10 : repetitions <= 0 ? 0 : (() => {
-        for (let i = 0; i < repGrades.length - 1; i += 1) {
-            const lo = repGrades[i]; const hi = repGrades[i + 1];
-            if (repetitions >= PRESS_BENCH_BAREM[lo] && repetitions <= PRESS_BENCH_BAREM[hi]) {
-                const span = PRESS_BENCH_BAREM[hi] - PRESS_BENCH_BAREM[lo];
-                return span <= 0 ? lo : lo + ((repetitions - PRESS_BENCH_BAREM[lo]) / span) * (hi - lo);
-            }
-        }
-        return 0;
-    })();
-    const weightScore = Math.max(0, Math.min(10, (kg / 65) * 10));
-    return Math.round(Math.min(repScore, weightScore) * 10) / 10;
+    const weightScore = Math.max(0, Math.min(10, (kg / PRESS_BENCH_TARGET.weightKg) * 10));
+    const repsScore = Math.max(0, Math.min(10, (repetitions / PRESS_BENCH_TARGET.reps) * 10));
+    const timeScore = Number.isFinite(time) && time > 0
+        ? (time <= PRESS_BENCH_TARGET.timeSeconds ? 10 : Math.max(0, Math.min(10, 10 - ((time - PRESS_BENCH_TARGET.timeSeconds) / PRESS_BENCH_TARGET.timeSeconds) * 10)))
+        : null;
+    const scores = [weightScore, repsScore];
+    if (timeScore !== null) scores.push(timeScore);
+    return Math.round(Math.min(...scores) * 10) / 10;
 }
 
 export const LEVELS = [
@@ -195,7 +184,7 @@ export function daysSince(sessions, type) {
 }
 
 export function weakPoints(sessions) {
-    return ['cames', 'estructural', 'forestal', 'aquatic'].map((t) => ({ type: t, days: daysSince(sessions, t) }))
+    return ['forestal', 'estructural'].map((t) => ({ type: t, days: daysSince(sessions, t) }))
         .filter((x) => x.days === null || x.days >= 7).sort((a, b) => (b.days ?? 999) - (a.days ?? 999));
 }
 
@@ -211,7 +200,7 @@ export function buildUserContext({ sessions, weights, goals, material, minutes }
     return [
         '[DADES DE L\'USUARI]',
         `Ratxa: ${streak(sessions)} dies. Punts totals: ${totalPoints(sessions)}. Nivell: ${levelFor(totalPoints(sessions)).name}.`,
-        `Dies sense treballar: ${['cames', 'estructural', 'forestal', 'aquatic', 'manteniment'].map((t) => `${TYPES[t].short}=${daysSince(sessions, t) ?? 'mai'}`).join(', ')}.`,
+        `Dies sense treballar: ${['estructural', 'forestal', 'manteniment'].map((t) => `${TYPES[t].short}=${daysSince(sessions, t) ?? 'mai'}`).join(', ')}.`,
         `Material disponible: ${(material && material.length ? material : ['cap indicat']).join(', ')}.`,
         `Objectius: ${goals.length ? goals.map((g) => `${g.title} (${g.current || 0}/${g.target || 0} ${g.unit || ''})`).join('; ') : 'cap'}.`,
         `Pes corporal recent: ${weights.slice(0, 5).map((w) => `${w.date}:${w.weight}kg`).join(', ') || 'sense registres'}.`,
