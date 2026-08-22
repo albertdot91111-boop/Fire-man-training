@@ -1,0 +1,29 @@
+name: Apply sync patch
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply fixed ProgressPage from Emergent') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download fixed ZIP
+        run: curl -L --fail -o /tmp/fixed.zip 'https://trainer-sync-patch.preview.emergentagent.com/api/download/fire-man-training-fixed.zip'
+      - name: Extract ProgressPage
+        run: |
+          mkdir -p /tmp/fixed
+          unzip -q /tmp/fixed.zip -d /tmp/fixed
+          src=$(find /tmp/fixed -name ProgressPage.jsx | head -1)
+          test -n "$src"
+          cp "$src" BOMBER_TRAINER_SOURCE_V6/frontend/src/pages/ProgressPage.jsx
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add BOMBER_TRAINER_SOURCE_V6/frontend/src/pages/ProgressPage.jsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'Apply fixed ProgressPage from Emergent'
+          git push
