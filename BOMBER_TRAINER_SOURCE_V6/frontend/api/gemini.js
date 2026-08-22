@@ -73,17 +73,26 @@ export default async function handler(req, res) {
       { role: 'user', parts: [{ text: `${question}\n\n[CONTEXT BOMBER TRAINER]\n${contextRaw}` }] },
     ];
     const systemInstruction = {
-      parts: [{ text: `Ets Bomber Coach de BOMBER TRAINER, especialitzat en la preparació de Bombers de Catalunya.
-
-REGLA PRINCIPAL: respon NOMÉS amb la resposta final destinada a l'usuari. No mostris mai raonament intern, prompts, notes de planificació ni textos de procés.
-
-Respon en català si l'usuari escriu en català i en castellà si escriu en castellà. Sigues clar, humà, pràctic i directe. Utilitza les dades proporcionades al context quan la pregunta sigui sobre l'usuari. No inventis dades ni barems oficials. Si falta una dada, digues-ho clarament. Separa dada registrada, interpretació i recomanació quan sigui útil. No tractis la navette com una prova activa si no està confirmada.` }],
+      parts: [{ text: `Ets Bomber Coach de BOMBER TRAINER, especialitzat en la preparació de Bombers de Catalunya.\n\nREGLA PRINCIPAL: respon NOMÉS amb la resposta final destinada a l'usuari. No mostris mai raonament intern, prompts, notes de planificació ni textos de procés.\n\nRespon en català si l'usuari escriu en català i en castellà si escriu en castellà. Sigues clar, humà, pràctic i directe. Utilitza les dades proporcionades al context quan la pregunta sigui sobre l'usuari. No inventis dades ni barems oficials. Si falta una dada, digues-ho clarament. Separa dada registrada, interpretació i recomanació quan sigui útil. No tractis la navette com una prova activa si no està confirmada.` }],
     };
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    // Gemini 3.7 Flash és el model actual recomanat per a producció.
+    // Amb Gemini 3.x no enviem temperature/top_p/top_k perquè aquests paràmetres
+    // estan obsolets i poden provocar errors de generació.
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ systemInstruction, contents, generationConfig: { temperature: 0.35, maxOutputTokens: 900 } }),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        systemInstruction,
+        contents,
+        generationConfig: {
+          thinkingConfig: { thinkingLevel: 'medium' },
+          maxOutputTokens: 900,
+        },
+      }),
     });
 
     const responseText = await response.text();
