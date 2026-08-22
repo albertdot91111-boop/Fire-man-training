@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Helmet from 'react-helmet';
 import { Link } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
-import pb from '@/lib/pocketBaseClient';
+import pb from '@/lib/pocketbaseClient';
 import { TYPES } from '@/lib/btData';
 const CLASSIFICATIONS=[['manteniment','Entrenament normal'],['forestal','Prova forestal'],['estructural','Prova estructural'],['aquatic','Prova aquàtica'],['pressbanca','Press banca']];
 const labels={running:'Córrer',run:'Córrer',trailrun:'Trail / forestal',trail:'Trail / forestal',swimming:'Natació',swim:'Natació',strength:'Força',weighttraining:'Força',cycling:'Bici',ride:'Bici',virtualride:'Bicicleta estàtica',indoorcycling:'Bicicleta estàtica',spinning:'Bicicleta estàtica'};
