@@ -2,6 +2,7 @@
 // FIX 2026-08-21: strict metrics + deterministic matching/dedup + resilient deletion.
 // FIX 2026-08-21b: do not retry rate-limit responses and do not PATCH unchanged activities.
 // FIX 2026-08-21c: PocketBase batch writes/deletes to avoid request storms.
+// FIX 2026-08-22: hydrate missing activity metrics from the activity endpoint.
 const KEY_STORAGE = 'bt_intervals_icu_api_key';
 const BATCH_SIZE = 50;
 export function getIntervalsApiKey() { return localStorage.getItem(KEY_STORAGE) || ''; }
@@ -27,11 +28,12 @@ export async function testIntervalsConnection() { const data = await request('at
 function dateChunks(days) { const end=new Date(); const start=new Date(end.getTime()-days*86400000); const chunks=[]; for(let cursor=start;cursor<=end;){const chunkEnd=new Date(Math.min(cursor.getTime()+364*86400000,end.getTime()));chunks.push({oldest:cursor.toISOString().slice(0,10),newest:chunkEnd.toISOString().slice(0,10)});cursor=new Date(chunkEnd.getTime()+86400000);} return chunks; }
 async function fetchChunkResilient(chunk,onProgress,label=''){try{return{rows:await request('activities',chunk),failedRanges:[]};}catch(error){if(Number(error?.status)===429)return{rows:[],failedRanges:[{...chunk,error:error?.message||'Límit de peticions assolit'}]};const from=new Date(`${chunk.oldest}T00:00:00Z`).getTime();const to=new Date(`${chunk.newest}T00:00:00Z`).getTime();const days=Math.round((to-from)/86400000)+1;if(days<=31)return{rows:[],failedRanges:[{...chunk,error:error?.message||'Error desconegut'}]};const middle=new Date(from+Math.floor((days-1)/2)*86400000);const left={oldest:chunk.oldest,newest:middle.toISOString().slice(0,10)};const rightStart=new Date(middle.getTime()+86400000);const right={oldest:rightStart.toISOString().slice(0,10),newest:chunk.newest};onProgress?.(`${label}: reintentant rang petit`);const[a,b]=await Promise.all([fetchChunkResilient(left,onProgress,label),fetchChunkResilient(right,onProgress,label)]);return{rows:[...a.rows,...b.rows],failedRanges:[...a.failedRanges,...b.failedRanges]};}}
 export async function getRecentIntervalsActivities(days=3650,onProgress){const all=[];const seen=new Set();const failedRanges=[];const chunks=dateChunks(days);for(let i=0;i<chunks.length;i+=1){onProgress?.(`Sincronitzant historial… bloc ${i+1}/${chunks.length}`);const result=await fetchChunkResilient(chunks[i],onProgress,`bloc ${i+1}/${chunks.length}`);for(const activity of Array.isArray(result.rows)?result.rows:[]){const id=String(activity?.id??'').trim();const fallback=`${activity?.start_date_local||''}|${activity?.name||''}|${activity?.type||''}`;const key=id?`id:${id}`:`fb:${fallback}`;if(!seen.has(key)){seen.add(key);all.push(activity);}}failedRanges.push(...result.failedRanges);if(i<chunks.length-1)await sleep(500);}return{activities:all,failedRanges};}
+export async function getActivityDetails(activityId){return request('activity',{id:activityId});}
 export async function getActivityStreams(activityId){return request('streams',{id:activityId});}
 const firstValue=(...values)=>values.find(v=>v!==undefined&&v!==null&&v!=='');
 function positiveNumber(...values){for(const v of values){if(v===undefined||v===null||v==='')continue;const n=Number(v);if(Number.isFinite(n)&&n>0)return n;}return null;}
-function extractDurationSeconds(activity){return positiveNumber(activity?.moving_time,activity?.movingTime,activity?.elapsed_time,activity?.elapsedTime);}
-function extractDistanceMeters(activity){return positiveNumber(activity?.icu_distance,activity?.distance,activity?.distance_meters,activity?.distanceMeters);}
+function extractDurationSeconds(activity){return positiveNumber(activity?.moving_time,activity?.movingTime,activity?.elapsed_time,activity?.elapsedTime,activity?.duration_seconds,activity?.durationSeconds);}
+function extractDistanceMeters(activity){const km=positiveNumber(activity?.distance_km,activity?.distanceKm);return positiveNumber(activity?.icu_distance,activity?.distance,activity?.distance_meters,activity?.distanceMeters,activity?.total_distance,activity?.totalDistance) || (km ? km*1000 : null);}
 function activityDateKey(activity){return String(firstValue(activity?.start_date_local,activity?.startDateLocal,activity?.start_date)||'').slice(0,10);}
 function activityIdKey(activity){const id=activity?.id==null?'':String(activity.id).trim();return id||null;}
 function activityStartKey(activity){return String(firstValue(activity?.start_date_local,activity?.startDateLocal,activity?.start_date)||'').slice(0,16);}
@@ -63,9 +65,6 @@ async function sendBatch(pb,operations,onProgress,label='Actualitzant dades') {
       count+=slice.length;
     }catch(error){
       const status=Number(error?.status||error?.response?.code||0);
-      // If the Cloud instance doesn't allow batch, or one transaction fails,
-      // fall back only for this slice. This preserves compatibility without
-      // sacrificing batching on instances where it is enabled.
       if(status===429) throw error;
       for(const op of slice){
         if(op.method==='create') await pb.collection(op.collection||'bt_sessions').create(op.body);
@@ -86,21 +85,26 @@ export async function syncRecentIntervalsActivities({pb,owner,days=3650,typeReso
   for(const row of existingRows){const wearable=parseWearable(row?.wearable);const record={row,wearable,sourced:wearable?.source==='intervals.icu'};const id=wearableIdKey(wearable);if(id)byId.set(id,record);const date=String(row?.date||wearable?.startDateLocal||'').slice(0,10);if(date){const list=rowsByDate.get(date)||[];list.push(record);rowsByDate.set(date,list);}}
   const consumed=new Set();const operations=[];
   for(const activity of activities){try{
-    const date=activityDateKey(activity);if(!date){skipped+=1;continue;}
-    const id=activityIdKey(activity);const start=activityStartKey(activity);const name=activityNameKey(activity);const type=activityTypeKey(activity);
+    const id=activityIdKey(activity);
+    let sourceActivity=activity;
+    if(id && (!extractDurationSeconds(activity) || !extractDistanceMeters(activity))){
+      try { const detail=await getActivityDetails(id); if(detail && typeof detail==='object') sourceActivity={...activity,...detail}; } catch (_) { /* list data is still usable */ }
+    }
+    const date=activityDateKey(sourceActivity);if(!date){skipped+=1;continue;}
+    const start=activityStartKey(sourceActivity);const name=activityNameKey(sourceActivity);const type=activityTypeKey(sourceActivity);
     let existingRecord=id?byId.get(id):null;if(existingRecord&&consumed.has(existingRecord.row.id))existingRecord=null;
     const candidates=(rowsByDate.get(date)||[]).filter(r=>!consumed.has(r.row.id));
     if(!existingRecord)existingRecord=candidates.find(r=>wearableStartKey(r.wearable,r.row?.date)===start&&wearableNameKey(r.wearable)===name&&wearableTypeKey(r.wearable)===type)||null;
     if(!existingRecord&&start)existingRecord=candidates.find(r=>wearableStartKey(r.wearable,r.row?.date)===start&&wearableTypeKey(r.wearable)===type)||null;
     if(!existingRecord){const matches=candidates.filter(r=>wearableNameKey(r.wearable)===name&&wearableTypeKey(r.wearable)===type);if(matches.length===1)existingRecord=matches[0];}
-    const suggestedType=typeResolver?.(activity)||null;
+    const suggestedType=typeResolver?.(sourceActivity)||null;
     if(existingRecord){
-      consumed.add(existingRecord.row.id);const wearable=buildWearable(activity,existingRecord.wearable);if(id)byId.set(id,{row:existingRecord.row,wearable,sourced:true});
+      consumed.add(existingRecord.row.id);const wearable=buildWearable(sourceActivity,existingRecord.wearable);if(id)byId.set(id,{row:existingRecord.row,wearable,sourced:true});
       const typePatch=suggestedType&&existingRecord.row.type==='manteniment'?suggestedType:null;const wearableChanged=needsWearableUpdate(existingRecord.wearable,wearable);
       if(wearableChanged||typePatch){const patch={};if(wearableChanged){patch.date=date;patch.wearable=wearable;if(wearable.durationSeconds)patch.duration=Math.round((wearable.durationSeconds/60)*10)/10;}if(typePatch)patch.type=typePatch;operations.push({method:'update',id:existingRecord.row.id,body:patch});updated+=1;}
       continue;
     }
-    const wearable=buildWearable(activity);operations.push({method:'create',body:{type:suggestedType||'manteniment',date,duration:wearable.durationSeconds?Math.round((wearable.durationSeconds/60)*10)/10:0,points:0,notes:'Activitat sincronitzada des d’Intervals.icu · pendent d’associar',data:[],wearable,owner}});imported+=1;
+    const wearable=buildWearable(sourceActivity);operations.push({method:'create',body:{type:suggestedType||'manteniment',date,duration:wearable.durationSeconds?Math.round((wearable.durationSeconds/60)*10)/10:0,points:0,notes:'Activitat sincronitzada des d’Intervals.icu · pendent d’associar',data:[],wearable,owner}});imported+=1;
   }catch(error){skipped+=1;console.warn('[intervalsIcu] skip',activity?.id,error?.message||error);}}
   if(operations.length) await sendBatch(pb,operations,onProgress,'Guardant activitats');
   return{imported,updated,existing:updated,skipped,total:activities.length,failedRanges:result.failedRanges};
