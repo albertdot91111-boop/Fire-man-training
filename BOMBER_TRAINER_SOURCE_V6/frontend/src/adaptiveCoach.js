@@ -1,7 +1,8 @@
 import { analyzeBomberAthlete, adjustedSeconds } from './bomberCoach';
 
-const STRENGTH_TYPES = ['pit', 'cames', 'pressbanca'];
-const LABELS = { pit: 'pit / tren superior', cames: 'cames', pressbanca: 'press banca' };
+const STRENGTH_TYPES = ['pressbanca'];
+const LABELS = { pressbanca: 'press banca' };
+const PRIORITY_TESTS = new Set(['forestal', 'estructural']);
 
 function n(v) {
     const x = Number(v);
@@ -59,12 +60,12 @@ export function buildAdaptiveRecommendations({ sessions = [], goals = [], minute
         }
     }
 
-    if (analysis.weakest && analysis.weakest.latestGrade !== null) {
+    if (analysis.weakest && PRIORITY_TESTS.has(analysis.weakest.type) && analysis.weakest.latestGrade !== null) {
         recommendations.push({
             type: analysis.weakest.type,
             action: 'priority',
             title: `Prioritat específica: ${analysis.weakest.label}`,
-            detail: `És la prova amb pitjor nota actual (${analysis.weakest.latestGrade.toFixed(1)}/10).`,
+            detail: `És la prova prioritària amb pitjor nota actual (${analysis.weakest.latestGrade.toFixed(1)}/10).`,
         });
     }
 
@@ -72,7 +73,7 @@ export function buildAdaptiveRecommendations({ sessions = [], goals = [], minute
     return {
         recommendations,
         sessionMode: shortSession ? 'micro-sessió' : 'sessió completa',
-        principle: 'Progressa només una variable principal cada vegada i reavalua amb les dades següents.',
+        principle: 'Prioritza circuit forestal i estructural; mantén aquàtica en segon pla fins que surtin les bases. Progressa només una variable principal cada vegada i reavalua amb les dades següents.',
     };
 }
 
