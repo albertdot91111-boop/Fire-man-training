@@ -38,6 +38,18 @@ function contextFor(data) {
   return JSON.stringify({ diagnosis, priorityPolicy: 'Prioritzar i comparar només Forestal vs Estructural. Aquàtica/Piscina i Press banca fora de prioritats fins a noves bases.', sessions: (data.sessions || []).slice(0,150), weights: data.weights || [], goals: data.goals || [] });
 }
 
+const sourceMeta = {
+  local: { label: 'IA LOCAL', className: 'bg-emerald-100 text-emerald-800' },
+  gemini: { label: 'GEMINI', className: 'bg-blue-100 text-blue-800' },
+  'local-fallback': { label: 'GEMINI → IA LOCAL', className: 'bg-amber-100 text-amber-800' },
+  thinking: { label: 'PENSANT…', className: 'bg-slate-200 text-slate-600' },
+};
+
+function SourceBadge({ source }) {
+  const meta = sourceMeta[source] || sourceMeta.local;
+  return <span className={`mb-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-extrabold tracking-wide ${meta.className}`}>{meta.label}</span>;
+}
+
 export default function AiPageAuto() {
   const owner = pb.authStore.record?.id;
   const [sessions,setSessions] = useState([]), [weights,setWeights] = useState([]), [goals,setGoals] = useState([]);
@@ -83,7 +95,7 @@ export default function AiPageAuto() {
       <p className="mt-2 text-xs font-semibold text-purple-700">{sessions.length} sessions disponibles</p>
     </div>
     <div className="mt-4 flex flex-wrap gap-2">{QUICK.map(q=><button key={q} onClick={()=>ask(q)} disabled={loading} className="rounded-full bg-white border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">{q}</button>)}</div>
-    <div className="mt-4 space-y-3 rounded-3xl bg-white border border-slate-200 p-4 min-h-[320px]">{messages.map((m,i)=><div key={i} className={m.role==='user'?'text-right':'text-left'}><div className={`inline-block max-w-[92%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${m.role==='user'?'bg-slate-900 text-white':'bg-slate-100 text-slate-800'}`}>{m.content || 'Pensant…'}</div></div>)}<div ref={endRef}/></div>
+    <div className="mt-4 space-y-3 rounded-3xl bg-white border border-slate-200 p-4 min-h-[320px]">{messages.map((m,i)=><div key={i} className={m.role==='user'?'text-right':'text-left'}>{m.role==='assistant' && <SourceBadge source={m.source} />}<div className={`inline-block max-w-[92%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${m.role==='user'?'bg-slate-900 text-white':'bg-slate-100 text-slate-800'}`}>{m.content || 'Pensant…'}</div></div>)}<div ref={endRef}/></div>
     <form onSubmit={e=>{e.preventDefault();ask(input)}} className="sticky bottom-24 mt-4 flex gap-2 rounded-3xl bg-white border border-slate-200 p-3 shadow-sm"><input value={input} onChange={e=>setInput(e.target.value)} placeholder="Pregunta al Bomber Coach..." className="min-h-[48px] flex-1 rounded-xl border border-slate-300 px-4"/><button type="submit" disabled={loading||!input.trim()} className="min-h-[48px] rounded-xl bg-purple-700 px-5 font-bold text-white">{loading?'…':'Envia'}</button></form>
   </AppShell>;
 }
