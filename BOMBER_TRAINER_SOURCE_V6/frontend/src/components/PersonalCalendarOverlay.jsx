@@ -4,8 +4,7 @@ import pb from '@/lib/pocketbaseClient';
 
 const STORAGE_KEY = 'bomber-trainer-personal-calendar-v1';
 const WORKOUTS = [
-    ['pit', 'Press banca / tren superior', '💪'],
-    ['cames', 'Cames', '🦵'],
+    ['pressbanca', 'Press banca', '💪'],
     ['estructural', 'Incendi estructural', '🚒'],
     ['forestal', 'Incendi forestal', '🌲'],
     ['aquatic', 'Prova aquàtica', '🏊'],
@@ -58,7 +57,7 @@ function percent(values, field, validValues) {
 }
 
 function sessionLabel(session) {
-    const labels = { pit: 'Press banca / tren superior', cames: 'Cames', estructural: 'Incendi estructural', forestal: 'Incendi forestal', aquatic: 'Prova aquàtica', manteniment: 'Manteniment', rapid: 'Entrenament ràpid', descans: 'Dia no disponible' };
+    const labels = { pressbanca: 'Press banca', estructural: 'Incendi estructural', forestal: 'Incendi forestal', aquatic: 'Prova aquàtica', manteniment: 'Manteniment', rapid: 'Entrenament ràpid', descans: 'Dia no disponible' };
     return labels[session?.type] || session?.type || 'Sessió';
 }
 
