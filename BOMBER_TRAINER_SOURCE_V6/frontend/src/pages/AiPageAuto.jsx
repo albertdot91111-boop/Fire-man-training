@@ -2,34 +2,40 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Helmet from 'react-helmet';
 import AppShell from '@/components/AppShell';
 import pb from '@/lib/pocketbaseClient';
-import { diagnoseBomberProgress } from '@/aiEngine';
+import { diagnoseCurrentPriority } from '@/bomberPriority';
 import { routeAiQuestion } from '@/aiRouter';
 
-const QUICK = ['Com vaig?', 'Què haig de millorar?', 'Què faig avui?', 'Quins punts febles tinc?', 'Com evoluciono?'];
-const LABELS = { forestal: 'Forestal', estructural: 'Estructural', aquatic: 'Aquàtica', pressbanca: 'Press banca', cames: 'Cames' };
+const QUICK = ['Com vaig?', 'Com comparo Forestal i Estructural?', 'Què haig de millorar?', 'Què faig avui?', 'Quins punts febles tinc?', 'Com evoluciono?'];
+const LABELS = { forestal: 'Forestal', estructural: 'Estructural', aquatic: 'Piscina/Aquàtica', pressbanca: 'Press banca', cames: 'Cames' };
 
 function localAnswer(question, data) {
   const q = String(question || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const diagnosis = diagnoseBomberProgress(data.sessions || []);
-  const focus = LABELS[diagnosis.priority] || diagnosis.priority || 'pendent de més dades';
+  const diagnosis = diagnoseCurrentPriority(data.sessions || []);
+  const focus = LABELS[diagnosis.priority] || diagnosis.priority || 'pendent de dades';
   const has = (...terms) => terms.some(t => q.includes(t));
-  if (has('hola', 'bon dia', 'bona tarda', 'bona nit')) return `### Bomber Coach\n\nLa IA local està activa. La prioritat detectada és **${focus}**.`;
-  if (has('com vaig', 'com estic', 'progres', 'preparacio', 'preparació')) {
-    const rows = (diagnosis.tests || []).map(t => `• **${t.label}**: ${t.readiness?.progress ?? 0}%${t.latestTimeSeconds ? ` · ${Math.round(t.latestTimeSeconds)} s` : ''}`).join('\n');
-    return `### Estat actual\n\n**Prioritat:** ${focus}.\n\n${rows || 'No hi ha prou dades per valorar les proves.'}`;
-  }
-  if (has('millorar', 'punt feble', 'punts febles', 'prioritat')) return `### Prioritat\n\nAra mateix: **${focus}**.\n\nLa resposta es basa en les dades registrades.`;
-  if (has('avui', 'entreno', 'entrenar')) return `### Entrenament d'avui\n\n**Focus:** ${focus}.\n\nFes escalfament, treball específic de la prioritat i registra el resultat.`;
+  const compare = diagnosis.comparison || {};
+  const comparisonText = () => {
+    const f = compare.forestal, e = compare.estructural;
+    if (!f && !e) return 'Encara no hi ha prou dades de Forestal i Estructural per comparar-les.';
+    const line = (t) => t ? `**${t.label}**: ${t.latestTimeSeconds ? `${Math.round(t.latestTimeSeconds)} s` : 'sense temps'} · millor ${t.bestTimeSeconds ? `${Math.round(t.bestTimeSeconds)} s` : 'sense registre'}${t.penaltiesLatest ? ` · ${t.penaltiesLatest} penalitzacions` : ''}` : 'sense dades';
+    return `### Forestal vs Estructural\n\n• ${line(f)}\n• ${line(e)}\n\n**Prioritat actual:** ${focus}.\n\nLa prioritat només compara aquestes dues proves. **Piscina/Aquàtica i Press banca no entren en el càlcul de prioritats fins que surtin les noves bases.**`;
+  };
+  if (has('hola', 'bon dia', 'bona tarda', 'bona nit')) return `### Bomber Coach\n\nLa prioritat activa és **${focus}**. Ara estic comparant **Forestal i Estructural**.`;
+  if (has('compara', 'comparar', 'forestal i estructural', 'forestal vs estructural')) return comparisonText();
+  if (has('com vaig', 'com estic', 'progres', 'preparacio', 'preparació')) return comparisonText();
+  if (has('millorar', 'punt feble', 'punts febles', 'prioritat')) return `### Prioritat\n\n**${focus}**.\n\nLa prioritat surt exclusivament de la comparació **Forestal vs Estructural**. Piscina/Aquàtica i Press banca estan temporalment fora del càlcul.`;
+  if (has('avui', 'entreno', 'entrenar')) return `### Entrenament d'avui\n\n**Focus:** ${focus}.\n\nTreballa la prioritat actual sense convertir-ho en un test màxim si tens fatiga. Registra temps i penalitzacions per poder comparar la següent sessió.`;
   if (has('evolucio', 'evolució', 'millora', 'millorat')) {
-    const rows = (data.sessions || []).slice().sort((a,b) => String(b.date||'').localeCompare(String(a.date||''))).slice(0,8).map(s => `• ${s.date || 'Sense data'} — **${LABELS[s.type] || s.type || 'Activitat'}**${s.points != null ? ` · ${s.points} punts` : ''}`).join('\n');
-    return `### Evolució recent\n\n${rows || 'Encara no hi ha sessions suficients.'}`;
+    const active = (data.sessions || []).filter(s => s.type === 'forestal' || s.type === 'estructural');
+    const rows = active.slice().sort((a,b) => String(b.date||'').localeCompare(String(a.date||''))).slice(0,8).map(s => `• ${s.date || 'Sense data'} — **${LABELS[s.type] || s.type}**${s.points != null ? ` · ${s.points} punts` : ''}${s.penalties ? ` · ${s.penalties} penalitzacions` : ''}`).join('\n');
+    return `### Evolució Forestal + Estructural\n\n${rows || 'Encara no hi ha sessions suficients.'}`;
   }
-  return `### Coach local\n\nLa prioritat actual és **${focus}**. La pregunta no necessita Gemini per consultar les dades disponibles.`;
+  return `### Coach local\n\nLa prioritat actual és **${focus}**.\n\nEstic prioritzant **Forestal + Estructural** i comparant-les entre si. Piscina/Aquàtica i Press banca queden fora de prioritats fins a les noves bases.`;
 }
 
 function contextFor(data) {
-  const diagnosis = diagnoseBomberProgress(data.sessions || []);
-  return JSON.stringify({ diagnosis, sessions: (data.sessions || []).slice(0,150), weights: data.weights || [], goals: data.goals || [] });
+  const diagnosis = diagnoseCurrentPriority(data.sessions || []);
+  return JSON.stringify({ diagnosis, priorityPolicy: 'Prioritzar i comparar només Forestal vs Estructural. Aquàtica/Piscina i Press banca fora de prioritats fins a noves bases.', sessions: (data.sessions || []).slice(0,150), weights: data.weights || [], goals: data.goals || [] });
 }
 
 export default function AiPageAuto() {
@@ -73,6 +79,7 @@ export default function AiPageAuto() {
     <div className="rounded-3xl p-5" style={{backgroundColor:'#f3e8ff',borderLeft:'8px solid #7c3aed'}}>
       <p className="text-xs font-bold tracking-widest text-purple-700">BOMBER COACH · AUTO</p>
       <p className="mt-2 text-sm text-slate-700">El Router decideix automàticament entre IA local i Gemini.</p>
+      <p className="mt-2 text-xs font-semibold text-purple-700">Prioritat: FORESTAL + ESTRUCTURAL · Piscina/Aquàtica i Press banca desactivades fins a noves bases.</p>
       <p className="mt-2 text-xs font-semibold text-purple-700">{sessions.length} sessions disponibles</p>
     </div>
     <div className="mt-4 flex flex-wrap gap-2">{QUICK.map(q=><button key={q} onClick={()=>ask(q)} disabled={loading} className="rounded-full bg-white border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">{q}</button>)}</div>
