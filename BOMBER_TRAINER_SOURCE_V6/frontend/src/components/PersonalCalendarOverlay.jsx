@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import pb from '@/lib/pocketBaseClient';
+import pb from '@/lib/pocketbaseClient';
 
 const STORAGE_KEY = 'bomber-trainer-personal-calendar-v1';
 const WORKOUTS = [
