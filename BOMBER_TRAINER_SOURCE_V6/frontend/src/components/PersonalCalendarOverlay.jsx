@@ -76,8 +76,15 @@ function metricNumber(value) {
     return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+function isSyncedSession(session) {
+    const wearable = session?.wearable && typeof session.wearable === 'object' ? session.wearable : {};
+    const notes = String(session?.notes || '').toLowerCase();
+    return wearable?.source === 'intervals.icu' || Boolean(wearable?.activityId) || notes.includes('intervals.icu') || notes.includes('activitat importada del suunto');
+}
+
 function sessionMetrics(session) {
-    if (Array.isArray(session?.data) && session.data.length > 0) return null;
+    // Les sessions manuals continuen utilitzant el seu format actual.
+    if (!isSyncedSession(session)) return null;
     const wearable = session?.wearable;
     const wearableSeconds = metricNumber(wearable?.durationSeconds);
     const distanceKm = metricNumber(wearable?.distanceKm) || (metricNumber(wearable?.distanceMeters) ? metricNumber(wearable.distanceMeters) / 1000 : null);
@@ -101,6 +108,13 @@ function formatSeconds(value) {
     if (!n) return '—';
     const whole = Math.round(n);
     return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+function nextDateKey(dateKey) {
+    const [y, m, d] = String(dateKey).split('-').map(Number);
+    if (!y || !m || !d) return dateKey;
+    const next = new Date(y, m - 1, d + 1);
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
 }
 
 export default function PersonalCalendarOverlay() {
@@ -149,7 +163,8 @@ export default function PersonalCalendarOverlay() {
             setShowWorkoutPicker(false);
             setLoadingSessions(true);
             try {
-                const records = await pb.collection('bt_sessions').getFullList({ filter: `date = \"${key}\"`, sort: '-created' });
+                const nextKey = nextDateKey(key);
+                const records = await pb.collection('bt_sessions').getFullList({ filter: `(date = \"${key}\") || (date >= \"${key} 00:00:00\" && date < \"${nextKey} 00:00:00\")`, sort: '-created' });
                 setDaySessions(records);
             } catch {
                 setDaySessions([]);
