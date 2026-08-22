@@ -56,7 +56,7 @@ function recentByType(sessions, type, n = 8) { return sessions.filter((s) => s.t
 function daysSince(date) { const t = Date.parse(date || ''); return Number.isFinite(t) ? Math.max(0, (Date.now() - t) / 86400000) : null; }
 function sessionLoad(session) {
     const minutes = safeNumber(session?.duration, 0); const points = safeNumber(session?.points, 0); const penalties = safeNumber(session?.penalties, 0);
-    const typeFactor = { forestal: 1.15, estructural: 1.2, aquatic: 1.05, pit: 0.9, cames: 1, pressbanca: 1 }[session?.type] || 1;
+    const typeFactor = { forestal: 1.15, estructural: 1.2, aquatic: 1.05, pressbanca: 1 }[session?.type] || 1;
     return Math.max(1, (minutes || 15) * typeFactor + penalties * 8 + (points > 0 ? Math.min(points, 20) * 0.3 : 0));
 }
 function fatigueScore(sessions) {
