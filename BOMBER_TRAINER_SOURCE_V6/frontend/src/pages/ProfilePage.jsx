@@ -7,7 +7,6 @@ import pb from '@/lib/pocketbaseClient';
 import { TYPES, LEVELS, levelFor, nextLevel, streak, totalPoints, formatTime } from '@/lib/btData';
 
 const SPORT_META = [
-    ['cames', 'Cames'],
     ['estructural', 'Estructural'],
     ['forestal', 'Forestal'],
     ['aquatic', 'Aquàtica'],
@@ -24,6 +23,11 @@ function daysSince(date) {
     if (!date) return null;
     const a = new Date(date), b = new Date();
     return Math.max(0, Math.floor((b - a) / 86400000));
+}
+function parseWearable(value) {
+    if (!value) return {};
+    if (typeof value === 'string') { try { return JSON.parse(value) || {}; } catch { return {}; } }
+    return value || {};
 }
 function friendlyError(error) {
     const status = Number(error?.status || error?.response?.code || 0);
@@ -69,7 +73,10 @@ export default function ProfilePage() {
     const progressToNext = next ? Math.min(100, Math.round(((points - level.min) / (next.min - level.min)) * 100)) : 100;
     const preparationSessions = useMemo(() => sessions.filter((s) => PREPARATION_TYPES.has(s.type)), [sessions]);
     const totalSeconds = useMemo(() => preparationSessions.reduce((sum, s) => sum + (Number(s.duration) || 0) * 60, 0), [preparationSessions]);
-    const totalKm = useMemo(() => preparationSessions.reduce((sum, s) => sum + (Number(s.distance) || 0), 0), [preparationSessions]);
+    const totalKm = useMemo(() => preparationSessions.reduce((sum, s) => {
+        const wearable = parseWearable(s.wearable);
+        return sum + (Number(s.distance) > 0 ? Number(s.distance) : Number(wearable.distanceKm) > 0 ? Number(wearable.distanceKm) : 0);
+    }, 0), [preparationSessions]);
     const activeDays = useMemo(() => new Set(preparationSessions.map((s) => String(s.date || '').slice(0, 10))).size, [preparationSessions]);
     const latestWeight = weights[0];
     const bestBench = useMemo(() => sessions.reduce((best, s) => Math.max(best, ...(Array.isArray(s.data) ? s.data : []).filter((e) => String(e.exercici || '').toLowerCase().includes('press banca')).map((e) => Number(e.pes) || 0)), 0), [sessions]);
