@@ -28,15 +28,47 @@ function addPercentToGrades() {
   });
 }
 
+function compactForestalHome() {
+  const link = document.querySelector('[data-testid="link-today-action-forestal"]');
+  if (!link) return;
+  link.style.minHeight = '0';
+  link.style.padding = '12px';
+  const progress = link.querySelector('div.mt-3.rounded-2xl');
+  if (!progress) return;
+  progress.style.marginTop = '8px';
+  progress.style.padding = '8px';
+  progress.style.borderRadius = '14px';
+  progress.style.boxShadow = 'none';
+  const grid = progress.firstElementChild;
+  if (grid) {
+    grid.style.gridTemplateColumns = 'repeat(4, minmax(0, 1fr))';
+    grid.style.gap = '6px';
+    [...grid.children].forEach((item) => {
+      item.style.padding = '6px 7px';
+      item.style.borderRadius = '10px';
+      [...item.querySelectorAll('p')].forEach((p, index) => {
+        p.style.marginTop = index === 1 ? '2px' : '0';
+        if (index === 0) p.style.fontSize = '10px';
+        if (index === 1) p.style.fontSize = '16px';
+        if (index === 2) p.style.fontSize = '9px';
+        p.style.lineHeight = '1.15';
+      });
+    });
+  }
+  const note = [...progress.querySelectorAll('p')].find((p) => /GLOBAL és 0%/i.test(p.textContent || ''));
+  if (note) note.style.display = 'none';
+}
+
 export default function ProgressVisualFixes() {
   const location = useLocation();
   useEffect(() => {
-    if (location.pathname !== '/progres') return undefined;
     const owner = pb.authStore.record?.id || 'guest';
     let timer;
     const refresh = () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
+        if (location.pathname === '/') compactForestalHome();
+        if (location.pathname !== '/progres') return;
         const heading = [...document.querySelectorAll('h2')].find((el) => el.textContent?.trim() === 'Calendari del mes');
         const calendar = heading?.closest('section');
         if (calendar) {
@@ -101,7 +133,6 @@ export default function ProgressVisualFixes() {
           });
         }
 
-        // Physical-test scores are 0–10 in the data model; expose the same value as 0–100%.
         addPercentToGrades();
       }, 50);
     };
