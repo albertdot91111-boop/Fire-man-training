@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   patch-home:
-    if: !contains(github.event.head_commit.message, 'Auto: forestal home display')
+    if: "!contains(github.event.head_commit.message, 'Auto: forestal home display')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
