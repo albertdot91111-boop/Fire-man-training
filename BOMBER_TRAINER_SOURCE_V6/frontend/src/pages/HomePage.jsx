@@ -3,7 +3,7 @@ import Helmet from 'react-helmet';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import pb from '@/lib/pocketbaseClient';
-import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints, today, gradeForBench } from '@/lib/btData';
+import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints, today, gradeForBench, gradeForTime, formatTime } from '@/lib/btData';
 import { diagnoseBomberProgress } from '@/aiEngine';
 import { COACH_OPTIONS, chooseCoachOption, getCoachMotivation, getTodayCoachState, markCoachCompleted, markCoachUnavailable, nextCoachCheckMs, requestCoachNotifications, shouldCoachPrompt, showCoachNotification } from '@/lib/dailyCoachReminder';
 
@@ -143,6 +143,37 @@ function latestWearableSummary(sessions) {
     ].filter(Boolean).join(' · ') };
 }
 
+function ForestalHomeProgress({ sessions }) {
+    const session = sessions.find((s) => String(s?.type || '').trim().toLowerCase() === 'forestal');
+    const data = Array.isArray(session?.data) ? session.data : [];
+    const circuit = data.find((e) => String(e?.exercici || '').trim().toUpperCase() === 'CIRCUIT COMPLET') || {};
+    const trams = [
+        { label: 'Tram 1', time: Number(circuit.tram1) || 0, percent: Number(circuit.tram1Percentatge) || 0 },
+        { label: 'Tram 2', time: Number(circuit.tram2) || 0, percent: Number(circuit.tram2Percentatge) || 0 },
+        { label: 'Tram 3', time: Number(circuit.tram3) || 0, percent: Number(circuit.tram3Percentatge) || 0 },
+    ];
+    const completed = trams.filter((tram) => tram.time > 0).length;
+    const totalSeconds = trams.reduce((sum, tram) => sum + tram.time, 0);
+    const globalPercent = completed === 3
+        ? Math.round(Math.max(0, Math.min(100, gradeForTime('forestal', totalSeconds) * 10)))
+        : 0;
+    return <div className="mt-3 rounded-2xl bg-white/80 p-3 shadow-sm ring-1 ring-orange-100">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {trams.map((tram) => <div key={tram.label} className="rounded-xl bg-orange-50 px-3 py-2">
+                <p className="text-xs font-bold text-slate-500">{tram.label}</p>
+                <p className="mt-1 text-lg font-extrabold text-slate-900">{tram.percent}%</p>
+                <p className="text-xs font-medium text-slate-500">{tram.time > 0 ? formatTime(tram.time) : 'pendent'}</p>
+            </div>)}
+            <div className="rounded-xl bg-slate-100 px-3 py-2">
+                <p className="text-xs font-bold text-slate-500">GLOBAL</p>
+                <p className="mt-1 text-lg font-extrabold text-slate-900">{globalPercent}%</p>
+                <p className="text-xs font-medium text-slate-500">{completed}/3 trams</p>
+            </div>
+        </div>
+        {completed < 3 && <p className="mt-2 text-xs font-semibold text-slate-500">El GLOBAL és 0% fins que completis els 3 trams.</p>}
+    </div>;
+}
+
 export default function HomePage() {
     const [sessions, setSessions] = useState([]);
     const [coachPrompt, setCoachPrompt] = useState(null);
@@ -209,7 +240,7 @@ export default function HomePage() {
             {!hasTodayTraining && !coachPrompt && !manualCoachOpen && <button type="button" onClick={openCoachManually} className="w-full rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-4 text-left shadow-sm"><span className="block text-xs font-bold tracking-[0.18em] text-yellow-700">ENTRENADOR DIARI</span><span className="mt-1 block text-lg font-extrabold">🔥 Obrir entrenador ara</span><span className="mt-1 block text-sm text-slate-600">No cal esperar la notificació.</span></button>}
             {hasTodayTraining && <section className="rounded-3xl border border-green-200 bg-green-50 p-5 shadow-sm"><p className="text-xs font-bold tracking-[0.18em] text-green-700">AVUI FET</p><h2 className="mt-1 text-xl font-extrabold">🔥 Molt bé. Sessió registrada.</h2><p className="mt-2 text-sm font-medium text-slate-700">{currentStreak > 1 ? `Ratxa activa: ${currentStreak} dies seguits. No la trenquis.` : 'Primera passa feta. Demà tornem-hi.'}</p></section>}
             <section className="grid grid-cols-3 gap-3" aria-label="Resum de progrés">{[['PUNTS', points], ['RATXA', `${currentStreak} d`], ['NIVELL', level.name]].map(([label, value]) => <div key={label} className="rounded-3xl bg-white border border-slate-200 p-4 text-center shadow-sm"><p className="text-xs font-bold tracking-widest text-slate-400">{label}</p><p className="mt-1 text-lg font-extrabold">{value}</p></div>)}</section>
-            <section aria-labelledby="today-actions-heading"><div className="mb-3"><p className="text-xs font-bold tracking-[0.18em] text-slate-400">PUNT DE PARTIDA</p><h2 id="today-actions-heading" className="mt-1 text-xl font-extrabold tracking-tight">Tria una acció per començar</h2></div><div className="grid gap-3 sm:grid-cols-2">{TODAY_ACTIONS.map(({ label, to, type, detail }) => { const t = TYPES[type]; const pct = progressByType[type]; const showProgress = ['estructural', 'forestal', 'aquatic', 'pressbanca'].includes(type); return <Link key={to} to={to} aria-label={label} data-testid={`link-today-action-${type}`} className="group flex min-h-[112px] flex-col justify-between rounded-3xl border border-black/5 p-5 text-left shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}><div className="flex items-start justify-between gap-3"><p className="text-lg font-extrabold leading-tight tracking-tight">{label}</p>{showProgress && <span className="shrink-0 rounded-full bg-white/80 px-3 py-1 text-sm font-extrabold" style={{ color: t.color }}>{pct === null || pct === undefined ? '—' : `${pct}%`}</span>}</div><p className="mt-3 text-xs font-semibold" style={{ color: t.color }}>{detail}</p>{showProgress && pct !== null && pct !== undefined && <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/70"><div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: t.color }} /></div>}</Link>; })}</div></section>
+            <section aria-labelledby="today-actions-heading"><div className="mb-3"><p className="text-xs font-bold tracking-[0.18em] text-slate-400">PUNT DE PARTIDA</p><h2 id="today-actions-heading" className="mt-1 text-xl font-extrabold tracking-tight">Tria una acció per començar</h2></div><div className="grid gap-3 sm:grid-cols-2">{TODAY_ACTIONS.map(({ label, to, type, detail }) => { const t = TYPES[type]; const pct = progressByType[type]; const showProgress = ['estructural', 'aquatic', 'pressbanca'].includes(type); return <Link key={to} to={to} aria-label={label} data-testid={`link-today-action-${type}`} className="group flex min-h-[112px] flex-col justify-between rounded-3xl border border-black/5 p-5 text-left shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}><div className="flex items-start justify-between gap-3"><p className="text-lg font-extrabold leading-tight tracking-tight">{label}</p>{showProgress && <span className="shrink-0 rounded-full bg-white/80 px-3 py-1 text-sm font-extrabold" style={{ color: t.color }}>{pct === null || pct === undefined ? '—' : `${pct}%`}</span>}</div><p className="mt-3 text-xs font-semibold" style={{ color: t.color }}>{detail}</p>{type === 'forestal' && <ForestalHomeProgress sessions={sessions} />}{showProgress && pct !== null && pct !== undefined && <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/70"><div className="h-2 rounded-full" style={{ width: `${pct}%`, backgroundColor: t.color }} /></div>}</Link>; })}</div></section>
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><div className="flex items-end justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">RESUM</p><p className="text-xl font-extrabold">La teva preparació</p></div><div className="text-right"><p className="text-xs font-bold tracking-widest text-slate-400">SESSIONS</p><p className="text-xl font-extrabold">{sessions.length}</p></div></div><p className="mt-3 text-sm font-medium text-slate-600">{motivation}</p>{wearableSummary && <p className="mt-2 text-xs font-semibold text-slate-500">Última activitat sincronitzada ({wearableSummary.date}): {wearableSummary.text}</p>}</section>
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Punts febles detectats</h2>{weak.length === 0 ? <p className="mt-2 text-sm text-slate-500">Tot treballat aquesta setmana. Continua acumulant feina útil.</p> : <ul className="mt-3 space-y-2">{weak.map((w) => <li key={w.type} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3"><span className="font-semibold">{TYPES[w.type].label}</span><span className="text-sm text-slate-500">{w.days === null ? 'mai registrat' : `fa ${w.days} dies`}</span></li>)}</ul>}</section>
         </AppShell>
