@@ -66,6 +66,12 @@ export const PHYSICAL_BAREMS = {
 // Menys temps és millor. La nota final és el mínim de pes, repeticions i temps.
 export const PRESS_BENCH_TARGET = { weightKg: 65, reps: 20, timeSeconds: 45 };
 
+// Referència provisional estructural fins que surtin les bases oficials.
+// 2:10 (130 s) és el temps de referència del circuit complet de 6 exercicis.
+// Per valorar cada exercici individual, repartim els 130 s entre els 6 exercicis.
+export const STRUCTURAL_PROVISIONAL_TOTAL_SECONDS = 130;
+export const STRUCTURAL_PROVISIONAL_EXERCISE_SECONDS = STRUCTURAL_PROVISIONAL_TOTAL_SECONDS / 6;
+
 export function formatTime(totalSeconds) {
     const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
     const minutes = Math.floor(seconds / 60);
@@ -95,6 +101,13 @@ export function gradeForTime(type, totalSeconds) {
     const barem = PHYSICAL_BAREMS[type];
     const time = Number(totalSeconds);
     if (!barem || !Number.isFinite(time) || time <= 0) return null;
+
+    // Estructural: cada exercici val la seva part proporcional del barem provisional.
+    // El circuit complet continua tenint 2:10 com a referència de 100%.
+    if (type === 'estructural' && time < 90) {
+        return Math.round(Math.min(10, (STRUCTURAL_PROVISIONAL_EXERCISE_SECONDS / time) * 10) * 10) / 10;
+    }
+
     const grades = Object.keys(barem).map(Number).sort((a, b) => a - b);
     if (time <= barem[10]) return 10;
     if (time >= barem[0]) return 0;
