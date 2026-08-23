@@ -183,6 +183,12 @@ export default function HomePage() {
         const map = {};
         diagnosis.tests.forEach((test) => { map[test.type] = test.readiness?.progress ?? null; });
         ['estructural', 'forestal', 'aquatic'].forEach((type) => {
+            // El forestal parcial no té % global a la pantalla d'inici.
+            // Els percentatges individuals es mostren dins la pantalla de la prova.
+            if (type === 'forestal') {
+                map[type] = null;
+                return;
+            }
             const direct = physicalProgress(sessions, type);
             if (direct !== null) map[type] = direct;
             else map[type] = null;
