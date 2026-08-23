@@ -126,7 +126,8 @@ function StructuralHomeProgress({ sessions, percent, color }) {
     const items = STRUCTURAL_EXERCISES.map((name) => {
         const entry = data.find((e) => String(e?.exercici || '').trim().toLowerCase() === name.toLowerCase());
         const time = parseProgressSeconds(entry?.temps);
-        return { label: name.replace(/^\d+\.\s*/, ''), time, percent: time > 0 ? 100 : 0 };
+        const percentatge = time > 0 ? Math.round(Math.max(0, Math.min(100, gradeForTime('estructural', time) * 10))) : 0;
+        return { label: name.replace(/^\d+\.\s*/, ''), time, percent: percentatge };
     });
     const completed = items.filter((item) => item.time > 0).length;
     const globalPercent = completed === items.length ? (percent ?? 0) : 0;
