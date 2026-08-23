@@ -120,7 +120,33 @@ function ForestalHomeProgress({ sessions }) {
     </div>;
 }
 
+function StructuralHomeProgress({ sessions, percent, color }) {
+    const session = sessions.find((s) => String(s?.type || '').trim().toLowerCase() === 'estructural');
+    const data = Array.isArray(session?.data) ? session.data : [];
+    const items = STRUCTURAL_EXERCISES.map((name) => {
+        const entry = data.find((e) => String(e?.exercici || '').trim().toLowerCase() === name.toLowerCase());
+        const time = parseProgressSeconds(entry?.temps);
+        return { label: name.replace(/^\d+\.\s*/, ''), time, percent: time > 0 ? 100 : 0 };
+    });
+    const completed = items.filter((item) => item.time > 0).length;
+    const globalPercent = completed === items.length ? (percent ?? 0) : 0;
+    return <div className="mt-2 rounded-xl bg-white/75 p-2 ring-1 ring-black/5">
+        <div className="grid grid-cols-3 gap-1.5">
+            {items.map((item) => <div key={item.label} className="rounded-lg bg-red-50 px-1.5 py-1 text-center">
+                <p className="truncate text-[9px] font-bold text-slate-500">{item.label}</p>
+                <p className="text-xs font-extrabold text-slate-900">{item.percent}%</p>
+                <p className="text-[9px] font-medium text-slate-500">{item.time > 0 ? formatTime(item.time) : '—'}</p>
+            </div>)}
+        </div>
+        <div className="mt-1.5 flex items-center justify-between rounded-lg bg-slate-100 px-2 py-1">
+            <span className="text-[9px] font-bold text-slate-500">GLOBAL · {completed}/6</span>
+            <span className="text-xs font-extrabold" style={{ color }}>{globalPercent}%</span>
+        </div>
+    </div>;
+}
+
 function CompactTimedProgress({ sessions, type, percent, color }) {
+    if (type === 'estructural') return <StructuralHomeProgress sessions={sessions} percent={percent} color={color}/>;
     const summary = latestTimedSummary(sessions, type);
     return <div className="mt-2 rounded-xl bg-white/75 px-2.5 py-2 ring-1 ring-black/5">
         <div className="flex items-center justify-between gap-2">
