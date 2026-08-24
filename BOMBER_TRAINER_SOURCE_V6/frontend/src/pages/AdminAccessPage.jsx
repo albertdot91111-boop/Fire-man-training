@@ -45,7 +45,9 @@ export default function AdminAccessPage() {
     try {
       const [userRecords, accessRecords] = await Promise.all([
         pb.collection('users').getFullList({ sort: 'name,email', perPage: 500 }),
-        pb.collection('bt_access_logs').getFullList({ sort: '-date', perPage: 500, expand: 'relation' }),
+        // bt_access_logs is intentionally not cached by pocketbaseClient,
+        // so this always reflects the newest login.
+        pb.collection('bt_access_logs').getFullList({ sort: '-date,-created', perPage: 500, expand: 'relation' }),
       ]);
       setUsers(userRecords);
       setLogs(accessRecords);
@@ -79,7 +81,10 @@ export default function AdminAccessPage() {
     const result = new Map();
     for (const log of logs) {
       const id = relationId(log);
-      if (id && !result.has(id)) result.set(id, log.date || log.created);
+      const value = log.date || log.created;
+      if (!id || !value) continue;
+      const current = result.get(id);
+      if (!current || new Date(value).getTime() > new Date(current).getTime()) result.set(id, value);
     }
     return result;
   }, [logs]);
