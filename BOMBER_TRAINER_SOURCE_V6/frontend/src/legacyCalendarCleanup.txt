@@ -1,0 +1,1 @@
+This file intentionally documents the one-time cleanup of local calendar entries for 2026-08-21 through 2026-08-23. The cleanup helper is in autoCleanupCalendar.js.
