@@ -82,19 +82,17 @@ RULES = {
 ACCESS_RULES = {
     "listRule": ADMIN_RULE,
     "viewRule": ADMIN_RULE,
-    # A normal user may create only an access record belonging to themselves.
-    # Only the admin can read/update/delete the collection.
     "createRule": '@request.auth.id != "" && owner = @request.auth.id',
     "updateRule": ADMIN_RULE,
     "deleteRule": ADMIN_RULE,
 }
 
-SESSION_ADMIN_READ_RULES = {
+SESSION_ADMIN_RULES = {
     "listRule": OWNER_OR_ADMIN_RULE,
     "viewRule": OWNER_OR_ADMIN_RULE,
     "createRule": OWNER_RULE,
-    "updateRule": OWNER_RULE,
-    "deleteRule": OWNER_RULE,
+    "updateRule": OWNER_OR_ADMIN_RULE,
+    "deleteRule": OWNER_OR_ADMIN_RULE,
 }
 
 
@@ -112,7 +110,7 @@ def main():
         if name == "bt_access_logs":
             rules = ACCESS_RULES
         elif name == "bt_sessions":
-            rules = SESSION_ADMIN_READ_RULES
+            rules = SESSION_ADMIN_RULES
         else:
             rules = RULES
         payload = {"name": name, "type": "base", "fields": fields, **rules}
