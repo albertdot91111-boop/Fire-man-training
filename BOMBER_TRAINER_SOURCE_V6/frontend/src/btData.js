@@ -204,9 +204,10 @@ export function maintenanceEvolution(sessions) {
             }
         }
 
-        // The existing Progrés chart uses "total": show total repetitions.
-        // Plancha time is kept separately in planchaSeconds so it can be displayed as seconds, not rest.
-        point.total = point.totalReps;
+        // El gràfic existent utilitza "total". Si la sessió és només de planxa,
+        // fem que el punt sigui visible amb els segons de treball de la planxa.
+        // Si hi ha repeticions, mantenim el total de repeticions com abans.
+        point.total = point.totalReps > 0 ? point.totalReps : point.planchaSeconds;
         byDate[date] = point;
     });
 
