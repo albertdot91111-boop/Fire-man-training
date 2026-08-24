@@ -15,11 +15,19 @@ function relationId(log) {
   return log?.relation?.id || '';
 }
 
-function getLogEmail(log, account) {
+async function resolveEmail(log, userById) {
   if (log?.email) return log.email;
   if (typeof log?.action === 'string' && log.action.startsWith('login|')) return log.action.slice(6);
-  if (log?.expand?.relation?.email) return log.expand.relation.email;
-  if (account?.email) return account.email;
+  const id = relationId(log);
+  if (!id) return 'Compte anterior (usuari ja no disponible)';
+  const local = userById.get(id);
+  if (local?.email) return local.email;
+  try {
+    const account = await pb.collection('users').getOne(id, { fields: 'id,email,name' });
+    if (account?.email) return account.email;
+  } catch (e) {
+    console.warn('Could not resolve access-log user', id, e);
+  }
   return 'Compte anterior (usuari ja no disponible)';
 }
 
@@ -27,6 +35,7 @@ export default function AdminAccessPage() {
   const { user, isLoadingAuth } = useAuth();
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [logEmails, setLogEmails] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -44,6 +53,12 @@ export default function AdminAccessPage() {
         if (cancelled) return;
         setUsers(userRecords);
         setLogs(accessRecords);
+        const map = new Map(userRecords.map(account => [account.id, account]));
+        const resolved = {};
+        await Promise.all(accessRecords.map(async log => {
+          resolved[log.id] = await resolveEmail(log, map);
+        }));
+        if (!cancelled) setLogEmails(resolved);
       } catch (err) {
         console.error(err);
         if (!cancelled) setError('No s’han pogut carregar les dades d’administració. Revisa les regles de PocketBase.');
@@ -54,11 +69,7 @@ export default function AdminAccessPage() {
     return () => { cancelled = true; };
   }, [user, isLoadingAuth]);
 
-  const userById = useMemo(() => {
-    const map = new Map();
-    for (const account of users) map.set(account.id, account);
-    return map;
-  }, [users]);
+  const userById = useMemo(() => new Map(users.map(account => [account.id, account])), [users]);
 
   const lastAccessByUserId = useMemo(() => {
     const result = new Map();
@@ -100,7 +111,7 @@ export default function AdminAccessPage() {
               {logs.map(log => {
                 const id = relationId(log);
                 const account = log.expand?.relation || userById.get(id);
-                const label = getLogEmail(log, account);
+                const label = logEmails[log.id] || account?.email || log.email || 'Carregant correu…';
                 return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">inici de sessió</div></div><div className="text-sm text-slate-500">{formatDate(log.date)}</div></div>;
               })}
             </div>
