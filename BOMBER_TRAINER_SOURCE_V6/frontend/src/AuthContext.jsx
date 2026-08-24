@@ -88,9 +88,14 @@ export const AuthProvider = ({ children }) => {
         setUser(pb.authStore.record);
         setIsAuthenticated(true);
         setAuthChecked(true);
-        // Register the successful login immediately, rather than waiting for a
-        // later React render/effect. The logger itself deduplicates the same token.
-        await logAuthenticatedAccess(pb.authStore.record);
+
+        // IMPORTANT: logging is best-effort only. A PocketBase logging error
+        // must never turn a valid authentication into a failed login.
+        try {
+          await logAuthenticatedAccess(pb.authStore.record);
+        } catch (logError) {
+          console.error('Login succeeded but access logging failed', logError);
+        }
         return;
       } catch (error) {
         lastError = error;
@@ -112,7 +117,11 @@ export const AuthProvider = ({ children }) => {
       setUser(pb.authStore.record);
       setIsAuthenticated(true);
       setAuthChecked(true);
-      await logAuthenticatedAccess(pb.authStore.record);
+      try {
+        await logAuthenticatedAccess(pb.authStore.record);
+      } catch (logError) {
+        console.error('Signup succeeded but access logging failed', logError);
+      }
     } catch (error) {
       const normalized = new Error(friendlyAuthError(error, 'No s’ha pogut crear el compte.'));
       normalized.status = errorStatus(error);
