@@ -1,18 +1,19 @@
 import pb from '@/lib/pocketbaseClient';
 
-// Versioned key: ensures an already-open session gets one fresh access log
-// after this email-tracking change is deployed.
-const ACCESS_LOGGED_KEY = 'bt:access-logged-session-v2';
+// Versioned key: each user gets a fresh access log after this change.
+const ACCESS_LOGGED_KEY = 'bt:access-logged-session-v3';
 
 export async function logAuthenticatedAccess(user) {
   if (!user?.id || !user?.email) return;
   if (sessionStorage.getItem(ACCESS_LOGGED_KEY) === user.id) return;
 
+  // Keep the email in the plain action field as a durable fallback.
+  // This avoids depending on the users relation or an optional email field.
   const payload = {
     relation: user.id,
     email: user.email,
     date: new Date().toISOString(),
-    action: 'login',
+    action: `login|${user.email}`,
   };
 
   try {
@@ -23,7 +24,7 @@ export async function logAuthenticatedAccess(user) {
       await pb.collection('bt_access_logs').create({
         relation: user.id,
         date: payload.date,
-        action: `login|${user.email}`,
+        action: payload.action,
       });
       sessionStorage.setItem(ACCESS_LOGGED_KEY, user.id);
     } catch (fallbackError) {
