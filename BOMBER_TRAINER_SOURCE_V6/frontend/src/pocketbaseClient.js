@@ -10,6 +10,7 @@ const READ_CACHE_MS = 60_000;
 const readCache = new Map();
 const inFlightReads = new Map();
 const OPTIONAL_COLLECTIONS = new Set(['bt_weights', 'bt_goals']);
+const USER_PRIVATE_COLLECTIONS = new Set(['bt_sessions', 'bt_weights', 'bt_goals']);
 const WRITE_METHODS = new Set(['create', 'update', 'upsert', 'delete']);
 const cacheKey = (name, args) => `${pocketbaseClient.authStore.record?.id || 'guest'}|${name}|${JSON.stringify(args || [])}`;
 export const clearRequestCache = () => readCache.clear();
@@ -30,14 +31,27 @@ pocketbaseClient.collection = (name) => {
             }
             if (property !== 'getFullList') return Reflect.get(target, property, receiver);
             return async (...args) => {
-                const key = cacheKey(name, args);
+                const owner = pocketbaseClient.authStore.record?.id;
+                let requestArgs = args;
+
+                // PRIVACY BOUNDARY: all personal training/progress reads are
+                // automatically restricted to the currently authenticated user.
+                // This also protects older screens that forgot to add a filter.
+                if (USER_PRIVATE_COLLECTIONS.has(name) && owner) {
+                    const options = { ...(args[0] || {}) };
+                    const ownFilter = `owner = "${owner}"`;
+                    options.filter = options.filter ? `(${options.filter}) && ${ownFilter}` : ownFilter;
+                    requestArgs = [options, ...args.slice(1)];
+                }
+
+                const key = cacheKey(name, requestArgs);
                 const cached = readCache.get(key);
                 if (cached && Date.now() - cached.time < READ_CACHE_MS) return cached.value;
                 if (inFlightReads.has(key)) return inFlightReads.get(key);
 
                 const request = (async () => {
                     try {
-                        const value = await target.getFullList.apply(target, args);
+                        const value = await target.getFullList.apply(target, requestArgs);
                         readCache.set(key, { time: Date.now(), value });
                         return value;
                     } catch (error) {
