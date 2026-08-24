@@ -16,6 +16,7 @@ ADMIN_EMAIL = "albertdot91@gmail.com"
 
 OWNER_RULE = '@request.auth.id != "" && owner = @request.auth.id'
 ADMIN_RULE = f'@request.auth.email = "{ADMIN_EMAIL}"'
+OWNER_OR_ADMIN_RULE = f'({OWNER_RULE}) || ({ADMIN_RULE})'
 
 
 def req(method, path, token=None, body=None):
@@ -86,6 +87,14 @@ ACCESS_RULES = {
     "deleteRule": ADMIN_RULE,
 }
 
+SESSION_ADMIN_READ_RULES = {
+    "listRule": OWNER_OR_ADMIN_RULE,
+    "viewRule": OWNER_OR_ADMIN_RULE,
+    "createRule": OWNER_RULE,
+    "updateRule": OWNER_RULE,
+    "deleteRule": OWNER_RULE,
+}
+
 
 def main():
     status, auth = req(
@@ -98,7 +107,12 @@ def main():
     token = auth["token"]
 
     for name, fields in COLLECTIONS.items():
-        rules = ACCESS_RULES if name == "bt_access_logs" else RULES
+        if name == "bt_access_logs":
+            rules = ACCESS_RULES
+        elif name == "bt_sessions":
+            rules = SESSION_ADMIN_READ_RULES
+        else:
+            rules = RULES
         payload = {"name": name, "type": "base", "fields": fields, **rules}
         s, existing = req("GET", f"/api/collections/{name}", token)
         if s == 200:
@@ -116,8 +130,8 @@ def main():
                 sys.exit(1)
 
     users_rules = {
-        "listRule": "id = @request.auth.id",
-        "viewRule": "id = @request.auth.id",
+        "listRule": f'id = @request.auth.id || @request.auth.email = "{ADMIN_EMAIL}"',
+        "viewRule": f'id = @request.auth.id || @request.auth.email = "{ADMIN_EMAIL}"',
         "updateRule": "id = @request.auth.id",
         "deleteRule": "id = @request.auth.id",
         "createRule": "",
