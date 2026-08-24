@@ -1,9 +1,9 @@
 import pb from '@/lib/pocketbaseClient';
 
-const ACCESS_LOGGED_KEY = 'bt:access-logged-session';
+// Versioned key: ensures an already-open session gets one fresh access log
+// after this email-tracking change is deployed.
+const ACCESS_LOGGED_KEY = 'bt:access-logged-session-v2';
 
-// Guarda el correu directament al registre d'accés perquè l'administrador
-// pugui identificar sempre qui ha iniciat sessió.
 export async function logAuthenticatedAccess(user) {
   if (!user?.id || !user?.email) return;
   if (sessionStorage.getItem(ACCESS_LOGGED_KEY) === user.id) return;
@@ -19,8 +19,6 @@ export async function logAuthenticatedAccess(user) {
     await pb.collection('bt_access_logs').create(payload);
     sessionStorage.setItem(ACCESS_LOGGED_KEY, user.id);
   } catch (error) {
-    // If the deployed PocketBase schema is older and has no email field,
-    // keep the access event usable by storing the email in action as fallback.
     try {
       await pb.collection('bt_access_logs').create({
         relation: user.id,
