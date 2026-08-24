@@ -1,34 +1,36 @@
 import pb from '@/lib/pocketbaseClient';
 
-// Versioned key: each user gets a fresh access log after this change.
-const ACCESS_LOGGED_KEY = 'bt:access-logged-session-v3';
+const ACCESS_LOGGED_KEY = 'bt:access-logged-session-v4';
 
 export async function logAuthenticatedAccess(user) {
   if (!user?.id || !user?.email) return;
   if (sessionStorage.getItem(ACCESS_LOGGED_KEY) === user.id) return;
 
-  // Keep the email in the plain action field as a durable fallback.
-  // This avoids depending on the users relation or an optional email field.
-  const payload = {
-    relation: user.id,
-    email: user.email,
-    date: new Date().toISOString(),
-    action: `login|${user.email}`,
-  };
+  const date = new Date().toISOString();
 
+  // Try the full record first, including the email.
   try {
-    await pb.collection('bt_access_logs').create(payload);
-    sessionStorage.setItem(ACCESS_LOGGED_KEY, user.id);
+    const record = await pb.collection('bt_access_logs').create({
+      relation: user.id,
+      email: user.email,
+      date,
+      action: `login|${user.email}`,
+    });
+    if (record?.id) sessionStorage.setItem(ACCESS_LOGGED_KEY, user.id);
+    return;
   } catch (error) {
-    try {
-      await pb.collection('bt_access_logs').create({
-        relation: user.id,
-        date: payload.date,
-        action: payload.action,
-      });
-      sessionStorage.setItem(ACCESS_LOGGED_KEY, user.id);
-    } catch (fallbackError) {
-      console.warn('Bomber Trainer access log unavailable', fallbackError);
-    }
+    console.warn('Full access-log create failed; trying fallback', error);
+  }
+
+  // Fallback for an older schema without the email field.
+  try {
+    const record = await pb.collection('bt_access_logs').create({
+      relation: user.id,
+      date,
+      action: `login|${user.email}`,
+    });
+    if (record?.id) sessionStorage.setItem(ACCESS_LOGGED_KEY, user.id);
+  } catch (error) {
+    console.error('Bomber Trainer access log failed', error);
   }
 }
