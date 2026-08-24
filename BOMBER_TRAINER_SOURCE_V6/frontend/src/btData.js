@@ -55,20 +55,13 @@ export const PLANS = {
 export const INCIDENTS = ['Caiguda', 'Fatiga', 'Dolor', 'Material insuficient', 'Falta de temps', 'Calor'];
 export const POINTS = { complet: 100, manteniment: 40, minim: 20 };
 
-// Barem PROVISIONAL propi de Bomber Trainer. Es substituirà quan surtin les bases.
 export const PHYSICAL_BAREMS = {
     forestal: { 0: 280, 1: 270, 2: 260, 3: 250, 4: 240, 5: 230, 6: 220, 7: 210, 8: 205, 9: 200, 10: 190 },
     estructural: { 0: 230, 1: 220, 2: 210, 3: 200, 4: 190, 5: 180, 6: 170, 7: 160, 8: 150, 9: 140, 10: 130 },
     aquatic: { 0: 280, 1: 270, 2: 260, 3: 250, 4: 240, 5: 230, 6: 220, 7: 210, 8: 205, 9: 200, 10: 190 },
 };
 
-// Barem provisional actual de press banca: 65 kg + 20 repeticions + 45 s = 10.
-// Menys temps és millor. La nota final és el mínim de pes, repeticions i temps.
 export const PRESS_BENCH_TARGET = { weightKg: 65, reps: 20, timeSeconds: 45 };
-
-// Referència provisional estructural fins que surtin les bases oficials.
-// 2:10 (130 s) és el temps de referència del circuit complet de 6 exercicis.
-// Per valorar cada exercici individual, repartim els 130 s entre els 6 exercicis.
 export const STRUCTURAL_PROVISIONAL_TOTAL_SECONDS = 130;
 export const STRUCTURAL_PROVISIONAL_EXERCISE_SECONDS = STRUCTURAL_PROVISIONAL_TOTAL_SECONDS / 6;
 
@@ -101,13 +94,9 @@ export function gradeForTime(type, totalSeconds) {
     const barem = PHYSICAL_BAREMS[type];
     const time = Number(totalSeconds);
     if (!barem || !Number.isFinite(time) || time <= 0) return null;
-
-    // Estructural: cada exercici val la seva part proporcional del barem provisional.
-    // El circuit complet continua tenint 2:10 com a referència de 100%.
     if (type === 'estructural' && time < 90) {
         return Math.round(Math.min(10, (STRUCTURAL_PROVISIONAL_EXERCISE_SECONDS / time) * 10) * 10) / 10;
     }
-
     const grades = Object.keys(barem).map(Number).sort((a, b) => a - b);
     if (time <= barem[10]) return 10;
     if (time >= barem[0]) return 0;
@@ -160,37 +149,70 @@ export function parseSeries(value) {
     return String(value ?? '').split(/[\/,\s]+/).map(Number).filter(Number.isFinite);
 }
 
+// Per manteniment, el camp "temps" és temps de treball/manteniment.
+// En una planxa, "30" significa 30 segons i "1:00" significa 60 segons.
+function maintenanceSeconds(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return 0;
+    if (text.includes(':')) {
+        const [m, s = '0'] = text.split(':');
+        const minutes = Number(m), seconds = Number(s);
+        return Number.isFinite(minutes) && Number.isFinite(seconds) ? (minutes * 60) + seconds : 0;
+    }
+    const n = Number(text.replace(',', '.'));
+    return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export function maintenanceEvolution(sessions) {
-    const byExercise = {};
+    const byDate = {};
     sessions.filter((s) => s.type === 'manteniment').forEach((s) => {
+        const date = String(s.date || '').slice(0, 10);
+        if (!date) return;
         const data = Array.isArray(s.data) ? s.data : [];
+        const point = byDate[date] || {
+            date: date.slice(5),
+            fullDate: date,
+            total: 0,
+            totalReps: 0,
+            totalWeightVolume: 0,
+            planchaSeconds: 0,
+            seriesCount: 0,
+        };
+
         data.filter((item) => item?.exercici && item.exercici !== 'Bloc de manteniment').forEach((item) => {
-            const name = String(item.exercici).trim();
+            const exercise = String(item.exercici).trim();
             const reps = Number(item.repeticions ?? item.reps);
             const weight = Number(item.llastKg ?? item.pes);
-            const time = String(item.temps ?? '').trim();
-            if (!byExercise[name]) byExercise[name] = [];
-            if ((Number.isFinite(weight) && weight > 0) || (Number.isFinite(reps) && reps > 0) || time) {
-                byExercise[name].push({ date: s.date, weight: weight > 0 ? weight : null, reps: reps > 0 ? reps : null, time: time || null });
+            const time = maintenanceSeconds(item.temps);
+            const hasValue = (Number.isFinite(reps) && reps > 0) || (Number.isFinite(weight) && weight > 0) || time > 0 || String(item.llastKg || '').toLowerCase() === 'pes corporal';
+            if (!hasValue) return;
+
+            point.seriesCount += 1;
+            if (Number.isFinite(reps) && reps > 0) {
+                point.totalReps += reps;
+                if (Number.isFinite(weight) && weight > 0) point.totalWeightVolume += weight * reps;
             }
+            if (exercise.toLowerCase().includes('planxa') && time > 0) point.planchaSeconds += time;
         });
+
         const legacy = data.find((item) => item?.exercici === 'Bloc de manteniment');
         if (legacy) {
             const values = parseSeries(legacy.series ?? legacy.reps ?? legacy.temps);
             if (values.length) {
-                if (!byExercise.Manteniment) byExercise.Manteniment = [];
-                byExercise.Manteniment.push({ date: s.date, weight: null, reps: values.reduce((a, b) => a + b, 0), time: null });
+                point.seriesCount += 1;
+                point.totalReps += values.reduce((a, b) => a + b, 0);
             }
         }
+
+        // The existing Progrés chart uses "total": show total repetitions.
+        // Plancha time is kept separately in planchaSeconds so it can be displayed as seconds, not rest.
+        point.total = point.totalReps;
+        byDate[date] = point;
     });
-    return Object.entries(byExercise).map(([exercici, history]) => {
-        const sorted = history.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-        const last = sorted.at(-1) || null;
-        const previous = sorted.length > 1 ? sorted.at(-2) : null;
-        const bestWeight = Math.max(0, ...sorted.map((x) => x.weight || 0));
-        const bestReps = Math.max(0, ...sorted.map((x) => x.reps || 0));
-        return { exercici, history: sorted, last, previous, bestWeight: bestWeight || null, bestReps: bestReps || null };
-    }).sort((a, b) => a.exercici.localeCompare(b.exercici));
+
+    return Object.values(byDate)
+        .sort((a, b) => a.fullDate.localeCompare(b.fullDate))
+        .slice(-30);
 }
 
 export function streak(sessions) {
