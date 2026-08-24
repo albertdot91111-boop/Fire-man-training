@@ -64,6 +64,29 @@ function compactForestalHome() {
   if (note) note.style.display = 'none';
 }
 
+function aquaticVisuals() {
+  const title = [...document.querySelectorAll('h1,h2,p')].find((el) => /Prova aquàtica/i.test(el.textContent || ''));
+  if (!title) return;
+  const cards = [...document.querySelectorAll('section > div.rounded-3xl')];
+  const items = [
+    ['1. Entrada segura', '🧍‍♂️ → 🌊', 'Entrada peus primer · cap fora · contacte visual'],
+    ['2. Apnea', '🌊 ─── 🤿 ─── 🧱', '15 m sota tanca'],
+    ['3. Batuda / bicicleta', '🦵 ↔ 🦵', '30 s · cap i mans fora'],
+    ['4. Estil lliure sota corxeres', '🏊 ───── ↔ ─────', '25 m anada + 25 m tornada · toca paret'],
+    ['5. Crol de salvament', '🏊‍♂️ → 👀', '25 m · cap fora excepte corxeres'],
+    ['6. Remolc de maniquí', '🏊‍♂️ ── 🧍', '25 m · vies aèries fora · extracció completa'],
+  ];
+  items.forEach(([name, diagram, detail]) => {
+    const card = cards.find((el) => (el.textContent || '').includes(name));
+    if (!card || card.querySelector('[data-bt-aquatic-visual]')) return;
+    const visual = document.createElement('div');
+    visual.dataset.btAquaticVisual = 'true';
+    visual.style.cssText = 'margin-top:12px;padding:10px 12px;border-radius:16px;background:#e0f2fe;border:1px solid #bae6fd;display:flex;align-items:center;gap:10px;';
+    visual.innerHTML = `<span style="font-size:22px;line-height:1">${diagram}</span><span style="font-size:12px;font-weight:700;color:#075985">${detail}</span>`;
+    card.appendChild(visual);
+  });
+}
+
 export default function ProgressVisualFixes() {
   const location = useLocation();
   useEffect(() => {
@@ -74,6 +97,7 @@ export default function ProgressVisualFixes() {
       timer = window.setTimeout(() => {
         if (location.pathname === '/') compactForestalHome();
         if (location.pathname !== '/progres') return;
+        aquaticVisuals();
         const heading = [...document.querySelectorAll('h2')].find((el) => el.textContent?.trim() === 'Calendari del mes');
         const calendar = heading?.closest('section');
         if (calendar) {
