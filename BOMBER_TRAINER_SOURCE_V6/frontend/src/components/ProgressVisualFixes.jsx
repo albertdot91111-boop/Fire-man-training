@@ -3,12 +3,17 @@ import { useLocation } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
 import { readNutritionStatus } from './NutritionDaily';
 
-const keyFor = (year, month, day) => `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-const PERSONAL_KEY = 'bomber-trainer-personal-calendar-v1';
+const STORAGE_PREFIX = 'bomber-trainer-personal-calendar-v1-user-';
 
-function readPersonalDay(date) {
+function personalStorageKey(owner) {
+  return owner ? `${STORAGE_PREFIX}${owner}` : null;
+}
+
+function readPersonalDay(owner, date) {
   try {
-    const raw = localStorage.getItem(PERSONAL_KEY);
+    const key = personalStorageKey(owner);
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
     const data = raw ? JSON.parse(raw) : {};
     return data?.[date] || null;
   } catch (_) {
@@ -62,7 +67,7 @@ function compactForestalHome() {
 export default function ProgressVisualFixes() {
   const location = useLocation();
   useEffect(() => {
-    const owner = pb.authStore.record?.id || 'guest';
+    const owner = pb.authStore.record?.id || '';
     let timer;
     const refresh = () => {
       window.clearTimeout(timer);
@@ -84,8 +89,8 @@ export default function ProgressVisualFixes() {
             button.style.cursor = 'pointer';
             button.setAttribute('aria-label', `Obrir calendari personal del dia ${day}`);
 
-            const date = keyFor(now.getFullYear(), now.getMonth(), day);
-            const personal = readPersonalDay(date);
+            const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const personal = readPersonalDay(owner, date);
             const nutrition = personal?.nutrition || readNutritionStatus(owner, date);
             const trained = typeof personal?.trained === 'boolean' ? personal.trained : null;
 
