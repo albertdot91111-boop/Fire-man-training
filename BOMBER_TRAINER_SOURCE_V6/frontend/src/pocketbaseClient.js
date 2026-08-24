@@ -11,6 +11,7 @@ const readCache = new Map();
 const inFlightReads = new Map();
 const OPTIONAL_COLLECTIONS = new Set(['bt_weights', 'bt_goals']);
 const USER_PRIVATE_COLLECTIONS = new Set(['bt_sessions', 'bt_weights', 'bt_goals']);
+const NO_READ_CACHE_COLLECTIONS = new Set(['bt_access_logs']);
 const WRITE_METHODS = new Set(['create', 'update', 'upsert', 'delete']);
 const cacheKey = (name, args) => `${pocketbaseClient.authStore.record?.id || 'guest'}|${name}|${JSON.stringify(args || [])}`;
 export const clearRequestCache = () => readCache.clear();
@@ -39,15 +40,19 @@ pocketbaseClient.collection = (name) => {
                 // This also protects older screens that forgot to add a filter.
                 if (USER_PRIVATE_COLLECTIONS.has(name) && owner) {
                     const options = { ...(args[0] || {}) };
-                    const ownFilter = `owner = "${owner}"`;
+                    const ownFilter = `owner = \"${owner}\"`;
                     options.filter = options.filter ? `(${options.filter}) && ${ownFilter}` : ownFilter;
                     requestArgs = [options, ...args.slice(1)];
                 }
 
+                // Access logs are live admin telemetry. Never serve a stale
+                // 60-second cached copy here, otherwise a new login can appear
+                // in PocketBase but remain invisible in the admin panel.
+                const cacheable = !NO_READ_CACHE_COLLECTIONS.has(name);
                 const key = cacheKey(name, requestArgs);
-                const cached = readCache.get(key);
+                const cached = cacheable ? readCache.get(key) : null;
                 if (cached && Date.now() - cached.time < READ_CACHE_MS) return cached.value;
-                if (inFlightReads.has(key)) return inFlightReads.get(key);
+                if (cacheable && inFlightReads.has(key)) return inFlightReads.get(key);
 
                 const request = (async () => {
                     try {
@@ -58,7 +63,7 @@ pocketbaseClient.collection = (name) => {
                         const value = USER_PRIVATE_COLLECTIONS.has(name) && owner && Array.isArray(rawValue)
                             ? rawValue.filter((record) => String(record?.owner || '') === String(owner))
                             : rawValue;
-                        readCache.set(key, { time: Date.now(), value });
+                        if (cacheable) readCache.set(key, { time: Date.now(), value });
                         return value;
                     } catch (error) {
                         const status = Number(error?.status || error?.response?.code || 0);
@@ -74,11 +79,11 @@ pocketbaseClient.collection = (name) => {
                         }
                         throw error;
                     } finally {
-                        inFlightReads.delete(key);
+                        if (cacheable) inFlightReads.delete(key);
                     }
                 })();
 
-                inFlightReads.set(key, request);
+                if (cacheable) inFlightReads.set(key, request);
                 return request;
             };
         },
