@@ -10,10 +10,9 @@ export async function logAuthenticatedAccess(user) {
 
   try {
     await pb.collection('bt_access_logs').create({
-      owner: user.id,
-      email: user.email,
-      accessedAt: new Date().toISOString(),
-      userAgent: navigator.userAgent || '',
+      relation: user.id,
+      date: new Date().toISOString(),
+      action: 'login',
     });
     sessionStorage.setItem(ACCESS_LOGGED_KEY, user.id);
   } catch (error) {
