@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, LineChart, Bot, UserRound } from 'lucide-react';
 import pb from '@/lib/pocketbaseClient';
@@ -21,9 +21,35 @@ function getProfile() {
     return { initials: initials.toUpperCase(), name: fullName || record.email || 'Perfil' };
 }
 
+function cleanLegacyCalendarForCurrentUser() {
+    const userId = pb.authStore.record?.id;
+    if (!userId) return;
+    const key = `bomber-trainer-personal-calendar-v1-user-${userId}`;
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (!data || typeof data !== 'object') return;
+        let changed = false;
+        for (const day of ['2026-08-21', '2026-08-22', '2026-08-23']) {
+            if (Object.prototype.hasOwnProperty.call(data, day)) {
+                delete data[day];
+                changed = true;
+            }
+        }
+        if (changed) localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+        console.warn('Legacy calendar cleanup skipped', e);
+    }
+}
+
 export default function AppShell({ title, children }) {
     const { pathname } = useLocation();
     const profile = getProfile();
+
+    useEffect(() => {
+        cleanLegacyCalendarForCurrentUser();
+    }, []);
 
     return (
         <div className="min-h-[100dvh] bg-slate-50 text-slate-900 pb-24">
