@@ -10,16 +10,19 @@ function formatDate(value) {
   return new Date(value).toLocaleString('ca-ES', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function getLogEmail(log, account) {
+function getLogEmail(log, account, directAccounts) {
   if (log.email) return log.email;
   if (typeof log.action === 'string' && log.action.startsWith('login|')) return log.action.slice(6);
-  return account?.email || account?.name || 'Compte anterior (usuari ja no disponible)';
+  if (account?.email) return account.email;
+  if (directAccounts?.get(log.relation)?.email) return directAccounts.get(log.relation).email;
+  return 'Compte anterior (usuari ja no disponible)';
 }
 
 export default function AdminAccessPage() {
   const { user, isLoadingAuth } = useAuth();
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [directAccounts, setDirectAccounts] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,7 +37,24 @@ export default function AdminAccessPage() {
           pb.collection('users').getFullList({ sort: 'name,email', perPage: 200 }),
           pb.collection('bt_access_logs').getFullList({ sort: '-date', perPage: 500, expand: 'relation' }),
         ]);
-        if (!cancelled) { setUsers(userRecords); setLogs(accessRecords); }
+        if (cancelled) return;
+        setUsers(userRecords);
+        setLogs(accessRecords);
+
+        // Some old access records have only relation=id. Resolve those users
+        // individually as a fallback, so the admin can still see their email.
+        const missingIds = [...new Set(accessRecords.map(log => log.relation).filter(id => id && !logHasEmail(accessRecords, id, userRecords)))];
+        const resolved = new Map();
+        await Promise.all(missingIds.map(async id => {
+          try {
+            const account = await pb.collection('users').getOne(id);
+            if (account?.email) resolved.set(id, account);
+          } catch (_) {
+            // The account may genuinely have been deleted; then the old log
+            // cannot contain an email that was never stored in the log.
+          }
+        }));
+        if (!cancelled) setDirectAccounts(resolved);
       } catch (err) {
         console.error(err);
         if (!cancelled) setError('No s’han pogut carregar les dades d’administració. Revisa les regles de PocketBase.');
@@ -75,11 +95,16 @@ export default function AdminAccessPage() {
             <div className="border-b border-slate-200 px-5 py-4"><h2 className="font-bold text-slate-900">Historial d’inicis de sessió</h2><p className="text-sm text-slate-500 mt-1">{logs.length} accessos registrats</p></div>
             <div className="divide-y divide-slate-100">
               {logs.length === 0 && <div className="p-5 text-sm text-slate-500">Encara no hi ha accessos registrats.</div>}
-              {logs.map(log => { const account = log.expand?.relation || userById.get(log.relation); const label = getLogEmail(log, account); return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">inici de sessió</div></div><div className="text-sm text-slate-500">{formatDate(log.date)}</div></div>; })}
+              {logs.map(log => { const account = log.expand?.relation || userById.get(log.relation); const label = getLogEmail(log, account, directAccounts); return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">inici de sessió</div></div><div className="text-sm text-slate-500">{formatDate(log.date)}</div></div>; })}
             </div>
           </div>
         </>}
       </div>
     </main>
   );
+}
+
+function logHasEmail(logs, relationId, users) {
+  const log = logs.find(item => item.relation === relationId && (item.email || (typeof item.action === 'string' && item.action.startsWith('login|'))));
+  return Boolean(log || users.some(account => account.id === relationId && account.email));
 }
