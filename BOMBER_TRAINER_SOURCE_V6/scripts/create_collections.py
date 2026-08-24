@@ -17,6 +17,8 @@ ADMIN_EMAIL = "albertdot91@gmail.com"
 OWNER_RULE = '@request.auth.id != "" && owner = @request.auth.id'
 ADMIN_RULE = f'@request.auth.email = "{ADMIN_EMAIL}"'
 OWNER_OR_ADMIN_RULE = f'({OWNER_RULE}) || ({ADMIN_RULE})'
+ACCESS_OWNER_RULE = '@request.auth.id != "" && relation = @request.auth.id'
+ACCESS_ADMIN_OR_OWNER_RULE = f'({ACCESS_OWNER_RULE}) || ({ADMIN_RULE})'
 
 
 def req(method, path, token=None, body=None):
@@ -46,6 +48,14 @@ def owner_field():
     }
 
 
+def relation_field():
+    return {
+        "name": "relation", "type": "relation", "required": True,
+        "collectionId": USERS_ID, "cascadeDelete": False,
+        "minSelect": 0, "maxSelect": 1,
+    }
+
+
 def text(name):
     return {"name": name, "type": "text"}
 
@@ -67,7 +77,7 @@ COLLECTIONS = {
     "bt_goals": [text("title"), number("target"), number("current"), text("unit"), owner_field()],
     "bt_settings": [json_field("material"), text("displayName"), owner_field()],
     "bt_access_logs": [
-        owner_field(), text("email"), text("accessedAt"), text("userAgent"),
+        relation_field(), text("email"), text("date"), text("action"),
     ],
 }
 
@@ -82,7 +92,7 @@ RULES = {
 ACCESS_RULES = {
     "listRule": ADMIN_RULE,
     "viewRule": ADMIN_RULE,
-    "createRule": '@request.auth.id != "" && owner = @request.auth.id',
+    "createRule": ACCESS_OWNER_RULE,
     "updateRule": ADMIN_RULE,
     "deleteRule": ADMIN_RULE,
 }
