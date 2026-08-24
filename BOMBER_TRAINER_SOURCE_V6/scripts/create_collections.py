@@ -82,7 +82,9 @@ RULES = {
 ACCESS_RULES = {
     "listRule": ADMIN_RULE,
     "viewRule": ADMIN_RULE,
-    "createRule": '@request.auth.id != ""',
+    # A normal user may create only an access record belonging to themselves.
+    # Only the admin can read/update/delete the collection.
+    "createRule": '@request.auth.id != "" && owner = @request.auth.id',
     "updateRule": ADMIN_RULE,
     "deleteRule": ADMIN_RULE,
 }
