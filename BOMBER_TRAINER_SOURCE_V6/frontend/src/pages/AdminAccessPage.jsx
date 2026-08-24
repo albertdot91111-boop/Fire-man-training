@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import pb from '@/lib/pocketbaseClient';
 
-const ADMIN_EMAIL = 'albertdot91@gmail.com';
+const ADMIN_EMAIL = 'albertdot91111@gmail.com';
 
 function formatDate(value) {
   if (!value) return '—';
@@ -87,7 +87,6 @@ export default function AdminAccessPage() {
               {logs.map((log) => {
                 const expandedAccount = log.expand?.relation;
                 const account = expandedAccount || userById.get(log.relation);
-                // New logs contain email directly; old logs still use relation expansion.
                 const label = log.email || account?.email || account?.name || 'Compte anterior (usuari ja no disponible)';
                 return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">{log.action || 'login'}</div></div><div className="text-sm text-slate-500">{formatDate(log.date)}</div></div>;
               })}
