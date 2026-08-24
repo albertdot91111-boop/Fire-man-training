@@ -51,7 +51,13 @@ pocketbaseClient.collection = (name) => {
 
                 const request = (async () => {
                     try {
-                        const value = await target.getFullList.apply(target, requestArgs);
+                        const rawValue = await target.getFullList.apply(target, requestArgs);
+                        // Defense in depth: the admin account is intentionally allowed
+                        // to read all session records for the admin panel, but normal
+                        // personal screens must never receive another user's records.
+                        const value = USER_PRIVATE_COLLECTIONS.has(name) && owner && Array.isArray(rawValue)
+                            ? rawValue.filter((record) => String(record?.owner || '') === String(owner))
+                            : rawValue;
                         readCache.set(key, { time: Date.now(), value });
                         return value;
                     } catch (error) {
