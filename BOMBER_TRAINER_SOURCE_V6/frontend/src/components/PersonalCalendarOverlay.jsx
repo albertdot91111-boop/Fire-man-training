@@ -189,14 +189,27 @@ export default function PersonalCalendarOverlay() {
         setDateKey(null);
     };
 
-    const remove = () => {
+    const remove = async () => {
         if (!dateKey || !ownerId()) return;
+        if (!window.confirm(`Eliminar totes les dades personals i els entrenaments registrats del ${dateKey}? Aquesta acció no es pot desfer.`)) return;
         const next = { ...readCalendar() };
         delete next[dateKey];
         writeNutritionCompatibility(dateKey, null);
+        try {
+            const nextKey = nextDateKey(dateKey);
+            const records = await pb.collection('bt_sessions').getFullList({
+                filter: `owner = "${ownerId()}" && ((date = "${dateKey}") || (date >= "${dateKey} 00:00:00" && date < "${nextKey} 00:00:00"))`,
+            });
+            await Promise.all(records.map((session) => pb.collection('bt_sessions').delete(session.id)));
+        } catch (err) {
+            showToast(err?.response?.message || 'No s’han pogut eliminar els entrenaments del dia.');
+            return;
+        }
         if (!writeCalendar(next)) { showToast('No s’han pogut eliminar les dades.'); return; }
         setCalendar(next);
-        showToast('✓ Dades eliminades');
+        setDaySessions([]);
+        window.dispatchEvent(new CustomEvent('bt:progress-updated'));
+        showToast('✓ Dades del dia eliminades');
         setDateKey(null);
     };
 
