@@ -17,7 +17,6 @@ function relationId(log) {
 
 async function resolveEmail(log, userById) {
   if (log?.email) return log.email;
-  if (typeof log?.action === 'string' && log.action.startsWith('login|')) return log.action.slice(6);
   const id = relationId(log);
   if (!id) return 'Compte anterior (usuari ja no disponible)';
   const local = userById.get(id);
@@ -65,13 +64,22 @@ export default function AdminAccessPage() {
   useEffect(() => {
     if (isLoadingAuth || user?.email !== ADMIN_EMAIL) return;
     loadData();
+    const interval = window.setInterval(loadData, 5000);
+    const onFocus = () => loadData();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, [user, isLoadingAuth]);
 
   const lastAccessByUserId = useMemo(() => {
     const result = new Map();
     for (const log of logs) {
       const id = relationId(log);
-      if (id && !result.has(id)) result.set(id, log.date);
+      if (id && !result.has(id)) result.set(id, log.date || log.created);
     }
     return result;
   }, [logs]);
@@ -103,10 +111,8 @@ export default function AdminAccessPage() {
           <h1 className="mt-1 text-2xl font-black text-slate-900">Activitat dels usuaris</h1>
           <p className="mt-1 text-sm text-slate-500">Només el compte administrador pot veure aquesta informació.</p>
         </div>
-
         {loading && <div className="rounded-2xl bg-white p-5">Carregant…</div>}
         {error && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">{error}</div>}
-
         {!loading && !error && <>
           <div className="mb-6 rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
             <div className="border-b border-slate-200 px-5 py-4 flex items-center justify-between gap-3">
@@ -118,7 +124,6 @@ export default function AdminAccessPage() {
               {users.map(account => <div key={account.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><div className="font-semibold text-slate-900">{account.name || 'Sense nom'}</div><div className="text-sm text-slate-500">{account.email}</div></div><div className="text-sm text-slate-600 sm:text-right"><div><span className="font-semibold text-slate-800">Registrat:</span> {formatDate(account.created)}</div><div><span className="font-semibold text-slate-800">Últim inici:</span> {formatDate(lastAccessByUserId.get(account.id))}</div></div></div>)}
             </div>
           </div>
-
           <div className="rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
             <div className="border-b border-slate-200 px-5 py-4"><h2 className="font-bold text-slate-900">Historial d’inicis de sessió</h2><p className="text-sm text-slate-500 mt-1">{logs.length} accessos registrats</p></div>
             <div className="divide-y divide-slate-100">
@@ -127,7 +132,7 @@ export default function AdminAccessPage() {
                 const id = relationId(log);
                 const account = log.expand?.relation || users.find(a => a.id === id);
                 const label = logEmails[log.id] || account?.email || log.email || 'Carregant correu…';
-                return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">inici de sessió</div></div><div className="text-sm text-slate-500">{formatDate(log.date)}</div></div>;
+                return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">inici de sessió</div></div><div className="text-sm text-slate-500">{formatDate(log.date || log.created)}</div></div>;
               })}
             </div>
           </div>
