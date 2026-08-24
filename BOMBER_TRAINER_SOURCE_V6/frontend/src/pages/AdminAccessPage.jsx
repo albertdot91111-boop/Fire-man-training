@@ -30,13 +30,14 @@ export default function AdminAccessPage() {
         setError('');
         const [userRecords, accessRecords] = await Promise.all([
           pb.collection('users').getFullList({ sort: 'name,email', perPage: 200 }),
-          pb.collection('bt_access_logs').getFullList({ sort: '-accessedAt', perPage: 500 }),
+          pb.collection('bt_access_logs').getFullList({ sort: '-date', perPage: 500 }),
         ]);
         if (!cancelled) {
           setUsers(userRecords);
           setLogs(accessRecords);
         }
       } catch (err) {
+        console.error(err);
         if (!cancelled) setError('No s’han pogut carregar les dades d’administració. Revisa les regles de PocketBase.');
       } finally {
         if (!cancelled) setLoading(false);
@@ -46,10 +47,16 @@ export default function AdminAccessPage() {
     return () => { cancelled = true; };
   }, [user, isLoadingAuth]);
 
-  const lastAccessByEmail = useMemo(() => {
+  const userById = useMemo(() => {
+    const result = new Map();
+    for (const account of users) result.set(account.id, account);
+    return result;
+  }, [users]);
+
+  const lastAccessByUserId = useMemo(() => {
     const result = new Map();
     for (const log of logs) {
-      if (!result.has(log.email)) result.set(log.email, log.accessedAt);
+      if (!result.has(log.relation)) result.set(log.relation, log.date);
     }
     return result;
   }, [logs]);
@@ -88,7 +95,7 @@ export default function AdminAccessPage() {
                     </div>
                     <div className="text-sm text-slate-600 sm:text-right">
                       <div className="font-semibold text-slate-800">Últim inici de sessió</div>
-                      <div>{formatDate(lastAccessByEmail.get(account.email))}</div>
+                      <div>{formatDate(lastAccessByUserId.get(account.id))}</div>
                     </div>
                   </div>
                 ))}
@@ -102,12 +109,18 @@ export default function AdminAccessPage() {
               </div>
               <div className="divide-y divide-slate-100">
                 {logs.length === 0 && <div className="p-5 text-sm text-slate-500">Encara no hi ha accessos registrats.</div>}
-                {logs.map((log) => (
-                  <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                    <div className="font-semibold text-slate-900">{log.email}</div>
-                    <div className="text-sm text-slate-500">{formatDate(log.accessedAt)}</div>
-                  </div>
-                ))}
+                {logs.map((log) => {
+                  const account = userById.get(log.relation);
+                  return (
+                    <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                      <div>
+                        <div className="font-semibold text-slate-900">{account?.email || log.relation || 'Usuari desconegut'}</div>
+                        <div className="text-xs text-slate-500">{log.action || 'login'}</div>
+                      </div>
+                      <div className="text-sm text-slate-500">{formatDate(log.date)}</div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </>
