@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""Phase 1: create/update the 4 app collections in PocketBase.
+"""Create/update the Bomber Trainer PocketBase collections.
 Idempotent: creates if missing, updates fields+rules if present.
-Only documented fields are used. `owner` is a relation to the users auth
-collection to enforce per-user ownership rules.
 """
 import json
 import os
@@ -14,8 +12,10 @@ PB = os.environ.get("POCKETBASE_URL", "http://127.0.0.1:8090")
 EMAIL = os.environ["PB_SUPERUSER_EMAIL"]
 PASSWORD = os.environ["PB_SUPERUSER_PASSWORD"]
 USERS_ID = "_pb_users_auth_"
+ADMIN_EMAIL = "albertdot91@gmail.com"
 
 OWNER_RULE = '@request.auth.id != "" && owner = @request.auth.id'
+ADMIN_RULE = f'@request.auth.email = "{ADMIN_EMAIL}"'
 
 
 def req(method, path, token=None, body=None):
@@ -39,13 +39,9 @@ def req(method, path, token=None, body=None):
 
 def owner_field():
     return {
-        "name": "owner",
-        "type": "relation",
-        "required": True,
-        "collectionId": USERS_ID,
-        "cascadeDelete": False,
-        "minSelect": 0,
-        "maxSelect": 1,
+        "name": "owner", "type": "relation", "required": True,
+        "collectionId": USERS_ID, "cascadeDelete": False,
+        "minSelect": 0, "maxSelect": 1,
     }
 
 
@@ -66,14 +62,11 @@ COLLECTIONS = {
         text("type"), text("date"), number("duration"), number("points"),
         text("incidents"), text("notes"), json_field("data"), json_field("wearable"), owner_field(),
     ],
-    "bt_weights": [
-        text("date"), number("weight"), number("fat"), owner_field(),
-    ],
-    "bt_goals": [
-        text("title"), number("target"), number("current"), text("unit"), owner_field(),
-    ],
-    "bt_settings": [
-        json_field("material"), text("displayName"), owner_field(),
+    "bt_weights": [text("date"), number("weight"), number("fat"), owner_field()],
+    "bt_goals": [text("title"), number("target"), number("current"), text("unit"), owner_field()],
+    "bt_settings": [json_field("material"), text("displayName"), owner_field()],
+    "bt_access_logs": [
+        owner_field(), text("email"), text("accessedAt"), text("userAgent"),
     ],
 }
 
@@ -85,11 +78,18 @@ RULES = {
     "deleteRule": OWNER_RULE,
 }
 
+ACCESS_RULES = {
+    "listRule": ADMIN_RULE,
+    "viewRule": ADMIN_RULE,
+    "createRule": '@request.auth.id != ""',
+    "updateRule": ADMIN_RULE,
+    "deleteRule": ADMIN_RULE,
+}
+
 
 def main():
     status, auth = req(
-        "POST",
-        "/api/collections/_superusers/auth-with-password",
+        "POST", "/api/collections/_superusers/auth-with-password",
         body={"identity": EMAIL, "password": PASSWORD},
     )
     if status != 200:
@@ -98,10 +98,11 @@ def main():
     token = auth["token"]
 
     for name, fields in COLLECTIONS.items():
-        payload = {"name": name, "type": "base", "fields": fields, **RULES}
+        rules = ACCESS_RULES if name == "bt_access_logs" else RULES
+        payload = {"name": name, "type": "base", "fields": fields, **rules}
         s, existing = req("GET", f"/api/collections/{name}", token)
         if s == 200:
-            up = {"fields": fields, **RULES}
+            up = {"fields": fields, **rules}
             s2, res = req("PATCH", f"/api/collections/{existing['id']}", token, up)
             print(f"UPDATE {name}: {s2}")
             if s2 >= 400:
