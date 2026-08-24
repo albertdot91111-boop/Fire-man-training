@@ -25,9 +25,7 @@ export default function AdminAccessPage() {
         });
         if (!cancelled) setLogs(records);
       } catch (err) {
-        if (!cancelled) {
-          setError('No s’han pogut carregar els accessos. La col·lecció d’accessos encara pot no estar activada al servidor.');
-        }
+        if (!cancelled) setError('No s’han pogut carregar els accessos. La col·lecció d’accessos encara pot no estar activada al servidor.');
       } finally {
         if (!cancelled) setLoading(false);
       }
