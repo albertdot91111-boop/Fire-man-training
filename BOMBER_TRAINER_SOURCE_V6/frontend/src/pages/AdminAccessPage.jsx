@@ -42,6 +42,8 @@ export default function AdminAccessPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [deletingLogId, setDeletingLogId] = useState('');
+  const [deletingUserId, setDeletingUserId] = useState('');
 
   const loadData = async () => {
     setLoading(true);
@@ -49,7 +51,6 @@ export default function AdminAccessPage() {
     try {
       const [userRecords, accessRecords] = await Promise.all([
         pb.collection('users').getFullList({ sort: 'name,email', perPage: 500 }),
-        // bt_access_logs is live telemetry and is not cached.
         pb.collection('bt_access_logs').getFullList({ sort: '-date,-created', perPage: 500, expand: 'relation' }),
       ]);
       setUsers(userRecords);
@@ -123,6 +124,50 @@ export default function AdminAccessPage() {
     }
   };
 
+  const deleteSession = async (log) => {
+    if (!window.confirm('Vols esborrar aquest inici de sessió de l’historial?')) return;
+    setDeletingLogId(log.id);
+    setError('');
+    try {
+      await pb.collection('bt_access_logs').delete(log.id);
+      setLogs(current => current.filter(item => item.id !== log.id));
+      setLogEmails(current => {
+        const next = { ...current };
+        delete next[log.id];
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+      setError('No s’ha pogut esborrar aquest inici de sessió. Comprova la regla Delete de bt_access_logs.');
+    } finally {
+      setDeletingLogId('');
+    }
+  };
+
+  const deleteUserSessions = async (account) => {
+    const accountLogs = logs.filter(log => relationId(log) === account.id || normalizedEmail(log.email || logEmails[log.id]) === normalizedEmail(account.email));
+    if (accountLogs.length === 0) return;
+    if (!window.confirm(`Vols esborrar els ${accountLogs.length} inicis de sessió de ${account.name || account.email}?`)) return;
+    setDeletingUserId(account.id);
+    setError('');
+    try {
+      await Promise.all(accountLogs.map(log => pb.collection('bt_access_logs').delete(log.id)));
+      const ids = new Set(accountLogs.map(log => log.id));
+      setLogs(current => current.filter(log => !ids.has(log.id)));
+      setLogEmails(current => {
+        const next = { ...current };
+        accountLogs.forEach(log => delete next[log.id]);
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+      setError('No s’han pogut esborrar els inicis de sessió d’aquest usuari. Comprova la regla Delete de bt_access_logs.');
+      await loadData();
+    } finally {
+      setDeletingUserId('');
+    }
+  };
+
   if (isLoadingAuth) return <div className="p-6">Carregant…</div>;
   if (!user || user.email !== ADMIN_EMAIL) return <Navigate to="/" replace />;
 
@@ -144,7 +189,10 @@ export default function AdminAccessPage() {
             </div>
             <div className="divide-y divide-slate-100">
               {users.length === 0 && <div className="p-5 text-sm text-slate-500">No hi ha usuaris.</div>}
-              {users.map(account => <div key={account.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><div className="font-semibold text-slate-900">{account.name || 'Sense nom'}</div><div className="text-sm text-slate-500">{account.email}</div></div><div className="text-sm text-slate-600 sm:text-right"><div><span className="font-semibold text-slate-800">Registrat:</span> {formatDate(account.created)}</div><div><span className="font-semibold text-slate-800">Últim inici:</span> {formatDate(getLastAccess(account))}</div></div></div>)}
+              {users.map(account => {
+                const accountLogs = logs.filter(log => relationId(log) === account.id || normalizedEmail(log.email || logEmails[log.id]) === normalizedEmail(account.email));
+                return <div key={account.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><div className="font-semibold text-slate-900">{account.name || 'Sense nom'}</div><div className="text-sm text-slate-500">{account.email}</div></div><div className="flex flex-col sm:items-end gap-2 text-sm text-slate-600"><div><span className="font-semibold text-slate-800">Registrat:</span> {formatDate(account.created)}</div><div><span className="font-semibold text-slate-800">Últim inici:</span> {formatDate(getLastAccess(account))}</div>{accountLogs.length > 0 && <button type="button" onClick={() => deleteUserSessions(account)} disabled={deletingUserId === account.id || deleting} className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100 disabled:opacity-50">{deletingUserId === account.id ? 'Esborrant…' : `✕ Esborrar ${accountLogs.length} sessions`}</button>}</div></div>;
+              })}
             </div>
           </div>
           <div className="rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
@@ -154,8 +202,8 @@ export default function AdminAccessPage() {
               {logs.map(log => {
                 const id = relationId(log);
                 const account = log.expand?.relation || users.find(a => a.id === id);
-                const label = logEmails[log.id] || account?.email || log.email || 'Carregant correu…';
-                return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">inici de sessió</div></div><div className="text-sm text-slate-500">{formatDate(log.date || log.created)}</div></div>;
+                const label = logEmails[log.id] || account?.email || log.email || 'Compte anterior (usuari ja no disponible)';
+                return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">inici de sessió</div></div><div className="flex items-center gap-3 text-sm text-slate-500"><span>{formatDate(log.date || log.created)}</span><button type="button" onClick={() => deleteSession(log)} disabled={deletingLogId === log.id || deleting} className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100 disabled:opacity-50">{deletingLogId === log.id ? 'Esborrant…' : '✕ Esborrar'}</button></div></div>;
               })}
             </div>
           </div>
