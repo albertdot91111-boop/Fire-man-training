@@ -15,6 +15,10 @@ function relationId(log) {
   return log?.relation?.id || '';
 }
 
+function normalizedEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
 async function resolveEmail(log, userById) {
   if (log?.email) return log.email;
   const id = relationId(log);
@@ -45,8 +49,7 @@ export default function AdminAccessPage() {
     try {
       const [userRecords, accessRecords] = await Promise.all([
         pb.collection('users').getFullList({ sort: 'name,email', perPage: 500 }),
-        // bt_access_logs is intentionally not cached by pocketbaseClient,
-        // so this always reflects the newest login.
+        // bt_access_logs is live telemetry and is not cached.
         pb.collection('bt_access_logs').getFullList({ sort: '-date,-created', perPage: 500, expand: 'relation' }),
       ]);
       setUsers(userRecords);
@@ -77,17 +80,32 @@ export default function AdminAccessPage() {
     };
   }, [user, isLoadingAuth]);
 
-  const lastAccessByUserId = useMemo(() => {
-    const result = new Map();
+  const lastAccess = useMemo(() => {
+    const byId = new Map();
+    const byEmail = new Map();
     for (const log of logs) {
-      const id = relationId(log);
       const value = log.date || log.created;
-      if (!id || !value) continue;
-      const current = result.get(id);
-      if (!current || new Date(value).getTime() > new Date(current).getTime()) result.set(id, value);
+      if (!value) continue;
+      const timestamp = new Date(value).getTime();
+      const id = relationId(log);
+      const email = normalizedEmail(log.email || logEmails[log.id]);
+      if (id) {
+        const current = byId.get(id);
+        if (!current || timestamp > new Date(current).getTime()) byId.set(id, value);
+      }
+      if (email) {
+        const current = byEmail.get(email);
+        if (!current || timestamp > new Date(current).getTime()) byEmail.set(email, value);
+      }
     }
-    return result;
-  }, [logs]);
+    return { byId, byEmail };
+  }, [logs, logEmails]);
+
+  const getLastAccess = (account) => (
+    lastAccess.byId.get(account.id) ||
+    lastAccess.byEmail.get(normalizedEmail(account.email)) ||
+    null
+  );
 
   const clearSessionHistory = async () => {
     if (!window.confirm('Vols esborrar TOT l’historial d’inicis de sessió? Aquesta acció no es pot desfer.')) return;
@@ -126,7 +144,7 @@ export default function AdminAccessPage() {
             </div>
             <div className="divide-y divide-slate-100">
               {users.length === 0 && <div className="p-5 text-sm text-slate-500">No hi ha usuaris.</div>}
-              {users.map(account => <div key={account.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><div className="font-semibold text-slate-900">{account.name || 'Sense nom'}</div><div className="text-sm text-slate-500">{account.email}</div></div><div className="text-sm text-slate-600 sm:text-right"><div><span className="font-semibold text-slate-800">Registrat:</span> {formatDate(account.created)}</div><div><span className="font-semibold text-slate-800">Últim inici:</span> {formatDate(lastAccessByUserId.get(account.id))}</div></div></div>)}
+              {users.map(account => <div key={account.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><div className="font-semibold text-slate-900">{account.name || 'Sense nom'}</div><div className="text-sm text-slate-500">{account.email}</div></div><div className="text-sm text-slate-600 sm:text-right"><div><span className="font-semibold text-slate-800">Registrat:</span> {formatDate(account.created)}</div><div><span className="font-semibold text-slate-800">Últim inici:</span> {formatDate(getLastAccess(account))}</div></div></div>)}
             </div>
           </div>
           <div className="rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
