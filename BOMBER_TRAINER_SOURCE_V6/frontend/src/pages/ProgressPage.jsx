@@ -5,6 +5,8 @@ import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
 import { TYPES, formatTime, gradeForBench, gradeForTime, levelFor, maintenanceEvolution, streak, today, totalPoints } from '@/lib/btData';
 
+const ADMIN_EMAIL = 'albertdot91@gmail.com';
+
 function monthGrid(sessions) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -185,8 +187,11 @@ export default function ProgressPage() {
         }
         setLoadError('');
         try {
+            const userId = pb.authStore.record.id;
+            const isAdmin = String(pb.authStore.record.email || '').toLowerCase() === ADMIN_EMAIL;
+            const sessionOptions = { sort: '-date', ...(isAdmin ? {} : { filter: `owner = "${userId}"` }) };
             const [nextSessions, nextWeights, nextGoals] = await Promise.all([
-                pb.collection('bt_sessions').getFullList({ sort: '-date' }),
+                pb.collection('bt_sessions').getFullList(sessionOptions),
                 pb.collection('bt_weights').getFullList({ sort: '-date' }),
                 pb.collection('bt_goals').getFullList({ sort: '-created' }),
             ]);
