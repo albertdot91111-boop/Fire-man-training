@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import pb from '@/lib/pocketbaseClient';
+import { logAuthenticatedAccess } from './accessLogger';
 
 const AuthContext = createContext(null);
 const AUTH_REFRESH_KEY = 'bt:last-auth-refresh';
@@ -87,6 +88,9 @@ export const AuthProvider = ({ children }) => {
         setUser(pb.authStore.record);
         setIsAuthenticated(true);
         setAuthChecked(true);
+        // Register the successful login immediately, rather than waiting for a
+        // later React render/effect. The logger itself deduplicates the same token.
+        await logAuthenticatedAccess(pb.authStore.record);
         return;
       } catch (error) {
         lastError = error;
@@ -108,6 +112,7 @@ export const AuthProvider = ({ children }) => {
       setUser(pb.authStore.record);
       setIsAuthenticated(true);
       setAuthChecked(true);
+      await logAuthenticatedAccess(pb.authStore.record);
     } catch (error) {
       const normalized = new Error(friendlyAuthError(error, 'No s’ha pogut crear el compte.'));
       normalized.status = errorStatus(error);
