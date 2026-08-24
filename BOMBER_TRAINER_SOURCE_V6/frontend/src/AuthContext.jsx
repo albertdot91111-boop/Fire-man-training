@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import pb from '@/lib/pocketbaseClient';
-import { logAuthenticatedAccess } from './accessLogger';
+import { logAuthenticatedAccess, clearAccessLogSessionMarker } from './accessLogger';
 
 const AuthContext = createContext(null);
 const AUTH_REFRESH_KEY = 'bt:last-auth-refresh';
@@ -40,6 +40,15 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe && unsubscribe();
   }, []);
 
+  const registerCurrentAuthenticatedSession = useCallback(async () => {
+    if (!pb.authStore.isValid || !pb.authStore.record?.id) return;
+    try {
+      await logAuthenticatedAccess(pb.authStore.record, false);
+    } catch (error) {
+      console.error('Authenticated session logging failed', error);
+    }
+  }, []);
+
   const checkUserAuth = useCallback(async () => {
     setIsLoadingAuth(true);
     try {
@@ -56,6 +65,7 @@ export const AuthProvider = ({ children }) => {
             if (isDefinitiveAuthFailure(error)) {
               pb.authStore.clear();
               localStorage.removeItem(AUTH_REFRESH_KEY);
+              clearAccessLogSessionMarker();
               setUser(null);
               setIsAuthenticated(false);
             } else {
@@ -67,6 +77,7 @@ export const AuthProvider = ({ children }) => {
           setUser(pb.authStore.record || null);
           setIsAuthenticated(Boolean(pb.authStore.isValid));
         }
+        await registerCurrentAuthenticatedSession();
       } else {
         setUser(null);
         setIsAuthenticated(false);
@@ -75,7 +86,7 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingAuth(false);
       setAuthChecked(true);
     }
-  }, []);
+  }, [registerCurrentAuthenticatedSession]);
 
   useEffect(() => { checkUserAuth(); }, [checkUserAuth]);
 
@@ -85,14 +96,13 @@ export const AuthProvider = ({ children }) => {
       try {
         await pb.collection('users').authWithPassword(email, password);
         localStorage.setItem(AUTH_REFRESH_KEY, String(Date.now()));
+        clearAccessLogSessionMarker();
         setUser(pb.authStore.record);
         setIsAuthenticated(true);
         setAuthChecked(true);
 
-        // IMPORTANT: logging is best-effort only. A PocketBase logging error
-        // must never turn a valid authentication into a failed login.
         try {
-          await logAuthenticatedAccess(pb.authStore.record);
+          await logAuthenticatedAccess(pb.authStore.record, true);
         } catch (logError) {
           console.error('Login succeeded but access logging failed', logError);
         }
@@ -114,11 +124,12 @@ export const AuthProvider = ({ children }) => {
       await pb.collection('users').create({ email, password, passwordConfirm: password });
       await pb.collection('users').authWithPassword(email, password);
       localStorage.setItem(AUTH_REFRESH_KEY, String(Date.now()));
+      clearAccessLogSessionMarker();
       setUser(pb.authStore.record);
       setIsAuthenticated(true);
       setAuthChecked(true);
       try {
-        await logAuthenticatedAccess(pb.authStore.record);
+        await logAuthenticatedAccess(pb.authStore.record, true);
       } catch (logError) {
         console.error('Signup succeeded but access logging failed', logError);
       }
@@ -130,6 +141,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
+    clearAccessLogSessionMarker();
     pb.authStore.clear();
     localStorage.removeItem(AUTH_REFRESH_KEY);
     setUser(null);
