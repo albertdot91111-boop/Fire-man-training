@@ -17,7 +17,7 @@ ADMIN_EMAIL = "albertdot91@gmail.com"
 OWNER_RULE = '@request.auth.id != "" && owner = @request.auth.id'
 ADMIN_RULE = f'@request.auth.email = "{ADMIN_EMAIL}"'
 OWNER_OR_ADMIN_RULE = f'({OWNER_RULE}) || ({ADMIN_RULE})'
-ACCESS_OWNER_RULE = '@request.auth.id != "" && relation = @request.auth.id'
+ACCESS_OWNER_RULE = '@request.auth.id != "" && @request.data.relation = @request.auth.id'
 ACCESS_ADMIN_OR_OWNER_RULE = f'({ACCESS_OWNER_RULE}) || ({ADMIN_RULE})'
 
 
