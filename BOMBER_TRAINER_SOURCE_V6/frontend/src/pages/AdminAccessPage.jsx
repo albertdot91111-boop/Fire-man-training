@@ -10,6 +10,12 @@ function formatDate(value) {
   return new Date(value).toLocaleString('ca-ES', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+function getLogEmail(log, account) {
+  if (log.email) return log.email;
+  if (typeof log.action === 'string' && log.action.startsWith('login|')) return log.action.slice(6);
+  return account?.email || account?.name || 'Compte anterior (usuari ja no disponible)';
+}
+
 export default function AdminAccessPage() {
   const { user, isLoadingAuth } = useAuth();
   const [users, setUsers] = useState([]);
@@ -69,7 +75,7 @@ export default function AdminAccessPage() {
             <div className="border-b border-slate-200 px-5 py-4"><h2 className="font-bold text-slate-900">Historial d’inicis de sessió</h2><p className="text-sm text-slate-500 mt-1">{logs.length} accessos registrats</p></div>
             <div className="divide-y divide-slate-100">
               {logs.length === 0 && <div className="p-5 text-sm text-slate-500">Encara no hi ha accessos registrats.</div>}
-              {logs.map(log => { const account = log.expand?.relation || userById.get(log.relation); const label = log.email || account?.email || account?.name || 'Compte anterior (usuari ja no disponible)'; return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">{log.action || 'login'}</div></div><div className="text-sm text-slate-500">{formatDate(log.date)}</div></div>; })}
+              {logs.map(log => { const account = log.expand?.relation || userById.get(log.relation); const label = getLogEmail(log, account); return <div key={log.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><div><div className="font-semibold text-slate-900">{label}</div><div className="text-xs text-slate-500">inici de sessió</div></div><div className="text-sm text-slate-500">{formatDate(log.date)}</div></div>; })}
             </div>
           </div>
         </>}
