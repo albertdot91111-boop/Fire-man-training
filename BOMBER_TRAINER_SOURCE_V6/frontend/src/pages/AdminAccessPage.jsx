@@ -115,7 +115,7 @@ export default function AdminAccessPage() {
             </div>
             <div className="divide-y divide-slate-100">
               {users.length === 0 && <div className="p-5 text-sm text-slate-500">No hi ha usuaris.</div>}
-              {users.map(account => <div key={account.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div><div className="font-semibold text-slate-900">{account.name || 'Sense nom'}</div><div className="text-sm text-slate-500">{account.email}</div></div><div className="text-sm text-slate-600 sm:text-right"><div className="font-semibold text-slate-800">Últim inici de sessió</div><div>{formatDate(lastAccessByUserId.get(account.id))}</div></div></div>)}
+              {users.map(account => <div key={account.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><div><div className="font-semibold text-slate-900">{account.name || 'Sense nom'}</div><div className="text-sm text-slate-500">{account.email}</div></div><div className="text-sm text-slate-600 sm:text-right"><div><span className="font-semibold text-slate-800">Registrat:</span> {formatDate(account.created)}</div><div><span className="font-semibold text-slate-800">Últim inici:</span> {formatDate(lastAccessByUserId.get(account.id))}</div></div></div>)}
             </div>
           </div>
 
