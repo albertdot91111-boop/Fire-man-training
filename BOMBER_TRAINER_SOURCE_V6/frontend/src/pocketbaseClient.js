@@ -3,6 +3,7 @@ import Pocketbase from 'pocketbase';
 // Single production PocketBase endpoint for Bomber Trainer V6.
 const POCKETBASE_API_URL = 'https://r16tt07qxqir1ks.ba7w.pocketbasecloud.com';
 const pocketbaseClient = new Pocketbase(POCKETBASE_API_URL);
+const ADMIN_EMAIL = 'albertdot91@gmail.com';
 
 // Avoid duplicate reads caused by page/auth re-renders. Keep stale successful
 // values available during a temporary 429 so the app remains usable.
@@ -33,12 +34,13 @@ pocketbaseClient.collection = (name) => {
             if (property !== 'getFullList') return Reflect.get(target, property, receiver);
             return async (...args) => {
                 const owner = pocketbaseClient.authStore.record?.id;
+                const isAdmin = String(pocketbaseClient.authStore.record?.email || '').toLowerCase() === ADMIN_EMAIL;
                 let requestArgs = args;
 
-                // PRIVACY BOUNDARY: all personal training/progress reads are
-                // automatically restricted to the currently authenticated user.
-                // This also protects older screens that forgot to add a filter.
-                if (USER_PRIVATE_COLLECTIONS.has(name) && owner) {
+                // Personal training/progress reads are restricted to the current
+                // user. The administrator is the deliberate exception for the
+                // admin users-progress dashboard.
+                if (USER_PRIVATE_COLLECTIONS.has(name) && owner && !isAdmin) {
                     const options = { ...(args[0] || {}) };
                     const ownFilter = `owner = \"${owner}\"`;
                     options.filter = options.filter ? `(${options.filter}) && ${ownFilter}` : ownFilter;
@@ -46,8 +48,7 @@ pocketbaseClient.collection = (name) => {
                 }
 
                 // Access logs are live admin telemetry. Never serve a stale
-                // 60-second cached copy here, otherwise a new login can appear
-                // in PocketBase but remain invisible in the admin panel.
+                // 60-second cached copy here.
                 const cacheable = !NO_READ_CACHE_COLLECTIONS.has(name);
                 const key = cacheKey(name, requestArgs);
                 const cached = cacheable ? readCache.get(key) : null;
@@ -57,22 +58,16 @@ pocketbaseClient.collection = (name) => {
                 const request = (async () => {
                     try {
                         const rawValue = await target.getFullList.apply(target, requestArgs);
-                        // Defense in depth: the admin account is intentionally allowed
-                        // to read all session records for the admin panel, but normal
-                        // personal screens must never receive another user's records.
-                        const value = USER_PRIVATE_COLLECTIONS.has(name) && owner && Array.isArray(rawValue)
+                        // Defense in depth: normal personal screens must never
+                        // receive another user's records. Admin intentionally gets all.
+                        const value = USER_PRIVATE_COLLECTIONS.has(name) && owner && !isAdmin && Array.isArray(rawValue)
                             ? rawValue.filter((record) => String(record?.owner || '') === String(owner))
                             : rawValue;
                         if (cacheable) readCache.set(key, { time: Date.now(), value });
                         return value;
                     } catch (error) {
                         const status = Number(error?.status || error?.response?.code || 0);
-                        // A rate limit must never cause a request storm. If this
-                        // exact query was loaded before, serve the stale result.
                         if (status === 429 && cached) return cached.value;
-                        // Optional panels (weight/objectives) must not break the
-                        // whole Progress screen when their collection is absent
-                        // or temporarily rate-limited.
                         if ((status === 404 || status === 429) && OPTIONAL_COLLECTIONS.has(name)) {
                             const message = error?.response?.message || error?.message || '';
                             if (status === 429 || /missing (or invalid )?collection context/i.test(message)) return [];
