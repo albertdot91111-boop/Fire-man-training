@@ -36,8 +36,10 @@ export default function AdminAccessPage() {
   const [deletingLogId, setDeletingLogId] = useState('');
   const [deletingUserId, setDeletingUserId] = useState('');
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showLoading = false) => {
+    // Només mostrem "Carregant" en la càrrega inicial. Les actualitzacions
+    // automàtiques mantenen la pantalla visible i no fan saltar el scroll.
+    if (showLoading) setLoading(true);
     setError('');
     try {
       const [userRecords, accessRecords] = await Promise.all([
@@ -59,21 +61,24 @@ export default function AdminAccessPage() {
       console.error(err);
       setError(errorMessage(err, 'No s’han pogut carregar les dades d’administració. Revisa les regles de PocketBase.'));
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (isLoadingAuth || user?.email !== ADMIN_EMAIL) return;
-    loadData();
-    const interval = window.setInterval(loadData, 5000);
-    const onFocus = () => loadData();
+    loadData(true);
+    const interval = window.setInterval(() => loadData(false), 5000);
+    const onFocus = () => loadData(false);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadData(false);
+    };
     window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [user, isLoadingAuth]);
 
@@ -111,11 +116,11 @@ export default function AdminAccessPage() {
       for (const record of records) {
         await pb.collection('bt_access_logs').delete(record.id);
       }
-      await loadData();
+      await loadData(false);
     } catch (err) {
       console.error(err);
       setError(errorMessage(err, 'No s’ha pogut esborrar tot l’historial.'));
-      await loadData();
+      await loadData(false);
     } finally {
       setDeleting(false);
     }
@@ -164,7 +169,7 @@ export default function AdminAccessPage() {
     } catch (err) {
       console.error(err);
       setError(errorMessage(err, 'No s’han pogut esborrar els inicis de sessió d’aquest usuari.'));
-      await loadData();
+      await loadData(false);
     } finally {
       setDeletingUserId('');
     }
