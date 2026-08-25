@@ -1,0 +1,97 @@
+import React, { useMemo, useState } from 'react';
+
+const EXERCISES = [
+  'Flexions', 'Fons', 'Dominades supines', 'Dominades pronades',
+  'Pes mort', 'Lunges', 'Sentadilles', 'Abdominals', 'Planxa',
+  'Elevacions de cames penjat', 'Step-up', 'Slam Ball', 'Farmer Carry', 'Burpees',
+];
+
+function hasValue(item) {
+  if (!item) return false;
+  const reps = Number(item.repeticions ?? item.reps);
+  const weight = String(item.llastKg ?? item.pes ?? '').trim();
+  const time = String(item.temps ?? '').trim();
+  return (Number.isFinite(reps) && reps > 0) || Number(weight) > 0 || Boolean(time) || weight.toLowerCase() === 'pes corporal';
+}
+
+function parseDate(value) {
+  const text = String(value || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(`${text}T12:00:00`) : null;
+}
+
+function dateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function startOfWeek(date) {
+  const d = new Date(date);
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+
+function formatDay(date) {
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export default function WeeklyMaintenanceSummary({ sessions }) {
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const week = useMemo(() => {
+    const monday = startOfWeek(new Date());
+    monday.setDate(monday.getDate() + weekOffset * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    const keys = new Set(Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(d.getDate() + i);
+      return dateKey(d);
+    }));
+    const weekSessions = sessions.filter((session) => session.type === 'manteniment' && keys.has(String(session.date || '').slice(0, 10)));
+    const completed = EXERCISES.map((name) => {
+      const done = weekSessions.some((session) => (Array.isArray(session.data) ? session.data : []).some((item) => String(item?.exercici || '').trim().toLowerCase() === name.toLowerCase() && hasValue(item)));
+      return { name, done };
+    });
+    return { monday, sunday, completed, doneCount: completed.filter((item) => item.done).length };
+  }, [sessions, weekOffset]);
+
+  const isCurrentWeek = weekOffset === 0;
+
+  return (
+    <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-extrabold">Manteniment de la setmana</h2>
+          <p className="mt-1 text-sm text-slate-500">Verd = fet · Vermell = falta fer</p>
+        </div>
+        <div className="rounded-2xl bg-slate-50 px-3 py-2 text-right">
+          <p className="text-[10px] font-bold tracking-wide text-slate-400">COMPLETAT</p>
+          <p className="text-lg font-extrabold">{week.doneCount}/{EXERCISES.length}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-2">
+        <button type="button" onClick={() => setWeekOffset((value) => value - 1)} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-extrabold">←</button>
+        <div className="text-center">
+          <p className="text-sm font-extrabold">{formatDay(week.monday)} — {formatDay(week.sunday)}</p>
+          <p className="text-xs text-slate-400">{isCurrentWeek ? 'Aquesta setmana' : weekOffset < 0 ? 'Setmana anterior' : 'Setmana següent'}</p>
+        </div>
+        <button type="button" onClick={() => setWeekOffset((value) => value + 1)} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-extrabold">→</button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {week.completed.map(({ name, done }) => (
+          <div key={name} className={`rounded-2xl border-2 p-3 ${done ? 'border-green-500 bg-green-50' : 'border-red-400 bg-red-50'}`}>
+            <div className="flex items-start gap-2">
+              <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${done ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>{done ? '✓' : '×'}</span>
+              <div>
+                <p className={`text-sm font-extrabold ${done ? 'text-green-800' : 'text-red-800'}`}>{name}</p>
+                <p className={`mt-1 text-[10px] font-bold ${done ? 'text-green-700' : 'text-red-700'}`}>{done ? 'FET AQUESTA SETMANA' : 'PENDENT'}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
