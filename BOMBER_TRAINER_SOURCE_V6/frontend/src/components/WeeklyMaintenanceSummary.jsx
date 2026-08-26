@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 const EXERCISES = [
   'Flexions', 'Fons', 'Dominades supines', 'Dominades pronades',
   'Pes mort', 'Lunges', 'Sentadilles', 'Abdominals', 'Planxa',
-  'Elevacions de cames penjat', 'Step-up', 'Slam Ball', 'Farmer Carry', 'Burpees',
+  'Elevacions de cames penjat', 'Burpees',
 ];
 
 function hasValue(item) {
