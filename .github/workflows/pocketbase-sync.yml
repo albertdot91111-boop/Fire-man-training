@@ -2,6 +2,10 @@ name: Sync PocketBase schema
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'BOMBER_TRAINER_SOURCE_V6/scripts/create_collections.py'
 
 jobs:
   sync:
