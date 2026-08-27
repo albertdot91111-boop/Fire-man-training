@@ -3,7 +3,7 @@ import Pocketbase from 'pocketbase';
 // Single production PocketBase endpoint for Bomber Trainer V6.
 const POCKETBASE_API_URL = 'https://r16tt07qxqir1ks.ba7w.pocketbasecloud.com';
 const pocketbaseClient = new Pocketbase(POCKETBASE_API_URL);
-const ADMIN_EMAIL = 'albertdot91111@gmail.com';
+const ADMIN_EMAIL = 'albertdot91@gmail.com';
 
 // Avoid duplicate reads caused by page/auth re-renders. Keep stale successful
 // values available during a temporary 429 so the app remains usable.
@@ -77,9 +77,12 @@ pocketbaseClient.collection = (name) => {
                     } catch (error) {
                         const status = Number(error?.status || error?.response?.code || 0);
                         if (status === 429 && cached) return cached.value;
-                        if ((status === 404 || status === 429) && OPTIONAL_COLLECTIONS.has(name)) {
-                            const message = error?.response?.message || error?.message || '';
-                            if (status === 429 || /missing (or invalid )?collection context/i.test(message)) return [];
+                        // Weight history and goals are auxiliary to the main
+                        // progress feed. If their collection/rules are temporarily
+                        // unavailable (including PocketBase 400s caused by schema
+                        // drift), do not make the whole Progrés page fail.
+                        if ((status === 400 || status === 404 || status === 429) && OPTIONAL_COLLECTIONS.has(name)) {
+                            return cached?.value || [];
                         }
                         throw error;
                     } finally {
