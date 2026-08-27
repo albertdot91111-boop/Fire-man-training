@@ -8,11 +8,13 @@ import sys
 import urllib.request
 import urllib.error
 
-PB = os.environ.get("POCKETBASE_URL", "http://127.0.0.1:8090").rstrip("/")
-# Accept either the PocketBase base URL or the Admin API URL ending in /api.
-# The script appends /api itself to all API paths.
-if PB.endswith("/api"):
-    PB = PB[:-4]
+PB = os.environ.get("POCKETBASE_URL", "http://127.0.0.1:8090").strip().rstrip("/")
+# Accept the PocketBase base URL, the API URL ending in /api, or the admin
+# panel URL ending in /_/ and normalize all of them to the instance root.
+for suffix in ("/_", "/api"):
+    if PB.endswith(suffix):
+        PB = PB[: -len(suffix)].rstrip("/")
+        break
 EMAIL = os.environ["PB_SUPERUSER_EMAIL"]
 PASSWORD = os.environ["PB_SUPERUSER_PASSWORD"]
 USERS_ID = "_pb_users_auth_"
@@ -116,12 +118,21 @@ SESSION_ADMIN_RULES = {
 
 
 def main():
+    # Quick, non-sensitive preflight: prove the normalized instance root is
+    # actually serving the PocketBase API before attempting superuser login.
+    health_status, health = req("GET", "/api/health")
+    if health_status != 200:
+        print("FATAL: PocketBase API health check failed", health_status, health)
+        print("Normalized POCKETBASE_URL:", PB)
+        sys.exit(1)
+
     status, auth = req(
         "POST", "/api/collections/_superusers/auth-with-password",
         body={"identity": EMAIL, "password": PASSWORD},
     )
     if status != 200:
         print("FATAL: superuser auth failed", status, auth)
+        print("Normalized POCKETBASE_URL:", PB)
         sys.exit(1)
     token = auth["token"]
 
