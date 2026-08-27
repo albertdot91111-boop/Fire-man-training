@@ -1,0 +1,18 @@
+name: Sync PocketBase rules
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync collections and admin rules
+        env:
+          POCKETBASE_URL: ${{ secrets.POCKETBASE_URL }}
+          PB_SUPERUSER_EMAIL: ${{ secrets.PB_SUPERUSER_EMAIL }}
+          PB_SUPERUSER_PASSWORD: ${{ secrets.PB_SUPERUSER_PASSWORD }}
+        run: python3 BOMBER_TRAINER_SOURCE_V6/scripts/create_collections.py
