@@ -9,6 +9,10 @@ import urllib.request
 import urllib.error
 
 PB = os.environ.get("POCKETBASE_URL", "http://127.0.0.1:8090").rstrip("/")
+# Accept either the PocketBase base URL or the Admin API URL ending in /api.
+# The script appends /api itself to all API paths.
+if PB.endswith("/api"):
+    PB = PB[:-4]
 EMAIL = os.environ["PB_SUPERUSER_EMAIL"]
 PASSWORD = os.environ["PB_SUPERUSER_PASSWORD"]
 USERS_ID = "_pb_users_auth_"
