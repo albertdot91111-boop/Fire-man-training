@@ -3,7 +3,7 @@ import Pocketbase from 'pocketbase';
 // Single production PocketBase endpoint for Bomber Trainer V6.
 const POCKETBASE_API_URL = 'https://r16tt07qxqir1ks.ba7w.pocketbasecloud.com';
 const pocketbaseClient = new Pocketbase(POCKETBASE_API_URL);
-const ADMIN_EMAIL = 'albertdot91@gmail.com';
+const ADMIN_EMAIL = 'albertdot91111@gmail.com';
 
 // Avoid duplicate reads caused by page/auth re-renders. Keep stale successful
 // values available during a temporary 429 so the app remains usable.
@@ -45,6 +45,15 @@ pocketbaseClient.collection = (name) => {
                     const ownFilter = `owner = \"${owner}\"`;
                     options.filter = options.filter ? `(${options.filter}) && ${ownFilter}` : ownFilter;
                     requestArgs = [options, ...args.slice(1)];
+                } else if (USER_PRIVATE_COLLECTIONS.has(name) && isAdmin && args[0]?.filter) {
+                    // ProgressPage historically supplied an owner filter even for
+                    // the administrator. Drop only that exact owner-only filter so
+                    // the admin path remains unrestricted as intended.
+                    const options = { ...(args[0] || {}) };
+                    if (/^\s*owner\s*=\s*[\"'][^\"']+[\"']\s*$/.test(String(options.filter))) {
+                        delete options.filter;
+                        requestArgs = [options, ...args.slice(1)];
+                    }
                 }
 
                 // Access logs are live admin telemetry. Never serve a stale
