@@ -112,14 +112,9 @@ SESSION_ADMIN_RULES = {
 
 
 def migrate_legacy_ownerless_records(token):
-    """Assign pre-owner records to the configured Bomber Trainer admin.
-
-    Historical records were created before the owner relation was enforced.
-    They must be claimed once by the existing admin account so the normal
-    owner-isolation rules can remain enabled for all future users.
-    """
-    user_filter = f'email = "{ADMIN_EMAIL}"'
-    status, users = req("GET", f"/api/collections/{USERS_ID}/records?perPage=10&filter={urllib.parse.quote(user_filter)}", token)
+    """Assign pre-owner records to the configured Bomber Trainer admin."""
+    user_filter = f'email="{ADMIN_EMAIL}"'
+    status, users = req("GET", f"/api/collections/{USERS_ID}/records?perPage=10&filter={user_filter}", token)
     if status != 200 or not users.get("items"):
         print(f"LEGACY MIGRATION: admin user {ADMIN_EMAIL!r} not found; skipped")
         return
