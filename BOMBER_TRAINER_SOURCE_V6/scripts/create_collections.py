@@ -31,9 +31,6 @@ def req(method, path, token=None, body=None):
     url = f"{PB}{path}"
     data = json.dumps(body).encode() if body is not None else None
     r = urllib.request.Request(url, data=data, method=method)
-    # PocketBase Cloud can reject Python's default Python-urllib user agent at
-    # the edge. Use an explicit normal browser-like UA for this server-to-server
-    # maintenance request rather than the Python-urllib fingerprint.
     r.add_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36")
     r.add_header("Accept", "application/json")
     r.add_header("Content-Type", "application/json")
@@ -118,8 +115,6 @@ SESSION_ADMIN_RULES = {
 
 
 def main():
-    # Quick, non-sensitive preflight: prove the normalized instance root is
-    # actually serving the PocketBase API before attempting superuser login.
     health_status, health = req("GET", "/api/health")
     if health_status != 200:
         print("FATAL: PocketBase API health check failed", health_status, health)
@@ -180,3 +175,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# CI trigger marker: keep this schema sync workflow runnable on script changes.
