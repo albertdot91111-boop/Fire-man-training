@@ -66,7 +66,34 @@ pocketbaseClient.collection = (name) => {
 
                 const request = (async () => {
                     try {
-                        const rawValue = await target.getFullList.apply(target, requestArgs);
+                        let rawValue;
+                        try {
+                            rawValue = await target.getFullList.apply(target, requestArgs);
+                        } catch (firstError) {
+                            const firstStatus = Number(firstError?.status || firstError?.response?.code || 0);
+                            if (firstStatus !== 400 || !Array.isArray(requestArgs) || !requestArgs[0]) throw firstError;
+
+                            // PocketBase Cloud can reject an otherwise valid list
+                            // request when a schema/rule is briefly out of sync.
+                            // Retry without the optional sort before failing the
+                            // whole page. Never remove the personal owner filter.
+                            const retryOptions = { ...requestArgs[0] };
+                            delete retryOptions.sort;
+                            const retryArgs = [retryOptions, ...requestArgs.slice(1)];
+                            try {
+                                rawValue = await target.getFullList.apply(target, retryArgs);
+                            } catch (secondError) {
+                                const secondStatus = Number(secondError?.status || secondError?.response?.code || 0);
+                                if (secondStatus !== 400 || !isAdmin) throw secondError;
+
+                                // The admin dashboard does not need a server-side
+                                // filter/sort. As a final admin-only recovery path,
+                                // read the collection with the SDK defaults and sort
+                                // the result locally. This also recovers historical
+                                // ownerless sessions instead of hiding them.
+                                rawValue = await target.getFullList.apply(target, [{}]);
+                            }
+                        }
                         // Defense in depth: normal personal screens must never
                         // receive another user's records. Admin intentionally gets all.
                         const value = USER_PRIVATE_COLLECTIONS.has(name) && owner && !isAdmin && Array.isArray(rawValue)
@@ -75,12 +102,12 @@ pocketbaseClient.collection = (name) => {
                         if (cacheable) readCache.set(key, { time: Date.now(), value });
                         return value;
                     } catch (error) {
-                        const status = Number(error?.status || error?.response?.code || 0);
-                        if (status === 429 && cached) return cached.value;
+                        if (Number(error?.status || error?.response?.code || 0) === 429 && cached) return cached.value;
                         // Weight history and goals are auxiliary to the main
                         // progress feed. If their collection/rules are temporarily
                         // unavailable (including PocketBase 400s caused by schema
                         // drift), do not make the whole Progrés page fail.
+                        const status = Number(error?.status || error?.response?.code || 0);
                         if ((status === 400 || status === 404 || status === 429) && OPTIONAL_COLLECTIONS.has(name)) {
                             return cached?.value || [];
                         }
