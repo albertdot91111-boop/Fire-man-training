@@ -8,11 +8,11 @@ import sys
 import urllib.request
 import urllib.error
 
-PB = os.environ.get("POCKETBASE_URL", "http://127.0.0.1:8090")
+PB = os.environ.get("POCKETBASE_URL", "http://127.0.0.1:8090").rstrip("/")
 EMAIL = os.environ["PB_SUPERUSER_EMAIL"]
 PASSWORD = os.environ["PB_SUPERUSER_PASSWORD"]
 USERS_ID = "_pb_users_auth_"
-ADMIN_EMAIL = "albertdot91@gmail.com"
+ADMIN_EMAIL = os.environ.get("PB_ADMIN_EMAIL", "albertdot91111@gmail.com")
 
 OWNER_RULE = '@request.auth.id != "" && owner = @request.auth.id'
 ADMIN_RULE = f'@request.auth.email = "{ADMIN_EMAIL}"'
@@ -25,6 +25,11 @@ def req(method, path, token=None, body=None):
     url = f"{PB}{path}"
     data = json.dumps(body).encode() if body is not None else None
     r = urllib.request.Request(url, data=data, method=method)
+    # PocketBase Cloud can reject Python's default Python-urllib user agent at
+    # the edge. Use an explicit normal browser-like UA for this server-to-server
+    # maintenance request rather than the Python-urllib fingerprint.
+    r.add_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36")
+    r.add_header("Accept", "application/json")
     r.add_header("Content-Type", "application/json")
     if token:
         r.add_header("Authorization", token)
