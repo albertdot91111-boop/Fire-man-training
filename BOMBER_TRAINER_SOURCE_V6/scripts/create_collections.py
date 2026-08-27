@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Create/update the Bomber Trainer PocketBase collections.
 Idempotent: creates if missing, updates fields+rules if present.
+Also migrates legacy ownerless records created before owner scoping to the
+configured Bomber Trainer admin account, so historical progress is preserved.
 """
 import json
 import os
@@ -16,7 +18,7 @@ for suffix in ("/_", "/api"):
 EMAIL = os.environ["PB_SUPERUSER_EMAIL"]
 PASSWORD = os.environ["PB_SUPERUSER_PASSWORD"]
 USERS_ID = "_pb_users_auth_"
-ADMIN_EMAIL = os.environ.get("PB_ADMIN_EMAIL", "albertdot91111@gmail.com")
+ADMIN_EMAIL = os.environ.get("PB_ADMIN_EMAIL", "albertdot91@gmail.com")
 
 OWNER_RULE = '@request.auth.id != "" && owner = @request.auth.id'
 ADMIN_RULE = f'@request.auth.email = "{ADMIN_EMAIL}"'
@@ -84,8 +86,6 @@ COLLECTIONS = {
     "bt_access_logs": [relation_field(), text("email"), text("date"), text("action")],
 }
 
-# Progress/profile collections must remain owner-isolated, but the configured
-# admin account also needs access because the progress dashboard reads them.
 PROFILE_RULES = {
     "listRule": OWNER_OR_ADMIN_RULE,
     "viewRule": OWNER_OR_ADMIN_RULE,
@@ -109,6 +109,42 @@ SESSION_ADMIN_RULES = {
     "updateRule": OWNER_OR_ADMIN_RULE,
     "deleteRule": OWNER_OR_ADMIN_RULE,
 }
+
+
+def migrate_legacy_ownerless_records(token):
+    """Assign pre-owner records to the configured Bomber Trainer admin.
+
+    Historical records were created before the owner relation was enforced.
+    They must be claimed once by the existing admin account so the normal
+    owner-isolation rules can remain enabled for all future users.
+    """
+    user_filter = f'email = "{ADMIN_EMAIL}"'
+    status, users = req("GET", f"/api/collections/{USERS_ID}/records?perPage=10&filter={urllib.parse.quote(user_filter)}", token)
+    if status != 200 or not users.get("items"):
+        print(f"LEGACY MIGRATION: admin user {ADMIN_EMAIL!r} not found; skipped")
+        return
+    admin_id = users["items"][0]["id"]
+
+    for name in ("bt_sessions", "bt_weights", "bt_goals", "bt_settings"):
+        page = 1
+        migrated = 0
+        while True:
+            status, data = req("GET", f"/api/collections/{name}/records?page={page}&perPage=500&filter=owner = \"\"", token)
+            if status != 200:
+                print(f"LEGACY MIGRATION: could not read {name}: {status}")
+                break
+            items = data.get("items", [])
+            for record in items:
+                update_status, _ = req("PATCH", f"/api/collections/{name}/records/{record['id']}", token, {"owner": admin_id})
+                if update_status < 300:
+                    migrated += 1
+                else:
+                    print(f"LEGACY MIGRATION: could not assign {name}/{record['id']}: {update_status}")
+            if page >= int(data.get("totalPages", page)):
+                break
+            page += 1
+        if migrated:
+            print(f"LEGACY MIGRATION: {name}: assigned {migrated} ownerless record(s) to {ADMIN_EMAIL}")
 
 
 def main():
@@ -146,6 +182,10 @@ def main():
             if s2 >= 400:
                 print(json.dumps(res, indent=2))
                 sys.exit(1)
+
+    # Repair historical data after the owner field/rules exist. Superuser
+    # access bypasses the owner API rules during this one-time migration.
+    migrate_legacy_ownerless_records(token)
 
     users_rules = {
         "listRule": f'id = @request.auth.id || @request.auth.email = "{ADMIN_EMAIL}"',
