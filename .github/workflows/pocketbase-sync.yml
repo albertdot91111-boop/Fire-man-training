@@ -1,0 +1,23 @@
+name: Sync PocketBase schema
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Sync PocketBase collections and rules
+        env:
+          POCKETBASE_URL: ${{ secrets.POCKETBASE_URL }}
+          PB_SUPERUSER_EMAIL: ${{ secrets.PB_SUPERUSER_EMAIL }}
+          PB_SUPERUSER_PASSWORD: ${{ secrets.PB_SUPERUSER_PASSWORD }}
+        run: python BOMBER_TRAINER_SOURCE_V6/scripts/create_collections.py
