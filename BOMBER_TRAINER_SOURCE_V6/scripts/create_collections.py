@@ -9,8 +9,6 @@ import urllib.request
 import urllib.error
 
 PB = os.environ.get("POCKETBASE_URL", "http://127.0.0.1:8090").strip().rstrip("/")
-# Accept the PocketBase base URL, the API URL ending in /api, or the admin
-# panel URL ending in /_/ and normalize all of them to the instance root.
 for suffix in ("/_", "/api"):
     if PB.endswith(suffix):
         PB = PB[: -len(suffix)].rstrip("/")
@@ -24,7 +22,6 @@ OWNER_RULE = '@request.auth.id != "" && owner = @request.auth.id'
 ADMIN_RULE = f'@request.auth.email = "{ADMIN_EMAIL}"'
 OWNER_OR_ADMIN_RULE = f'({OWNER_RULE}) || ({ADMIN_RULE})'
 ACCESS_OWNER_RULE = '@request.auth.id != "" && @request.data.relation = @request.auth.id'
-ACCESS_ADMIN_OR_OWNER_RULE = f'({ACCESS_OWNER_RULE}) || ({ADMIN_RULE})'
 
 
 def req(method, path, token=None, body=None):
@@ -84,17 +81,17 @@ COLLECTIONS = {
     "bt_weights": [text("date"), number("weight"), number("fat"), owner_field()],
     "bt_goals": [text("title"), number("target"), number("current"), text("unit"), owner_field()],
     "bt_settings": [json_field("material"), text("displayName"), owner_field()],
-    "bt_access_logs": [
-        relation_field(), text("email"), text("date"), text("action"),
-    ],
+    "bt_access_logs": [relation_field(), text("email"), text("date"), text("action")],
 }
 
-RULES = {
-    "listRule": OWNER_RULE,
-    "viewRule": OWNER_RULE,
-    "createRule": OWNER_RULE,
-    "updateRule": OWNER_RULE,
-    "deleteRule": OWNER_RULE,
+# Progress/profile collections must remain owner-isolated, but the configured
+# admin account also needs access because the progress dashboard reads them.
+PROFILE_RULES = {
+    "listRule": OWNER_OR_ADMIN_RULE,
+    "viewRule": OWNER_OR_ADMIN_RULE,
+    "createRule": OWNER_OR_ADMIN_RULE,
+    "updateRule": OWNER_OR_ADMIN_RULE,
+    "deleteRule": OWNER_OR_ADMIN_RULE,
 }
 
 ACCESS_RULES = {
@@ -121,10 +118,7 @@ def main():
         print("Normalized POCKETBASE_URL:", PB)
         sys.exit(1)
 
-    status, auth = req(
-        "POST", "/api/collections/_superusers/auth-with-password",
-        body={"identity": EMAIL, "password": PASSWORD},
-    )
+    status, auth = req("POST", "/api/collections/_superusers/auth-with-password", body={"identity": EMAIL, "password": PASSWORD})
     if status != 200:
         print("FATAL: superuser auth failed", status, auth)
         print("Normalized POCKETBASE_URL:", PB)
@@ -137,12 +131,11 @@ def main():
         elif name == "bt_sessions":
             rules = SESSION_ADMIN_RULES
         else:
-            rules = RULES
+            rules = PROFILE_RULES
         payload = {"name": name, "type": "base", "fields": fields, **rules}
         s, existing = req("GET", f"/api/collections/{name}", token)
         if s == 200:
-            up = {"fields": fields, **rules}
-            s2, res = req("PATCH", f"/api/collections/{existing['id']}", token, up)
+            s2, res = req("PATCH", f"/api/collections/{existing['id']}", token, {"fields": fields, **rules})
             print(f"UPDATE {name}: {s2}")
             if s2 >= 400:
                 print(json.dumps(res, indent=2))
