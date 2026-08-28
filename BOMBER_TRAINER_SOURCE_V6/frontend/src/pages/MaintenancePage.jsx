@@ -12,7 +12,7 @@ const WARMUP = [
   ['Sidelying KB arm bar', '2 × 4 / costat', 30, 'Espatlla estable i moviment lent i controlat.'],
   ['V + cobra', '2 × 6', 30, 'Alterna V i cobra amb control.'],
 ];
-const GROUPS = [{ title: '🎯 EXERCICIS PER A PROVES', subtitle: 'Transferència directa a les proves.', exercises: [['Burpees', 'Repeticions o temps']] }];
+const GROUPS = [{ title: '🎯 EXERCICIS PER A PROVES', subtitle: 'Transferència directa a les proves.', exercises: [['Burpees', 'Repeticions o temps'], ['SLAM ball', 'Repeticions o temps']] }];
 const GENERAL_GROUPS = [
   { title: '🏋️ TRONC SUPERIOR', exercises: [['Flexions', 'Repeticions'], ['Fons', 'Repeticions'], ['Dominades supines', 'Repeticions'], ['Dominades pronades', 'Repeticions']] },
   { title: '🦵 TRONC INFERIOR', exercises: [['Pes mort', 'Pes (kg) + repeticions'], ['Lunges', 'Repeticions'], ['Sentadilles', 'Pes (kg) + repeticions']] },
