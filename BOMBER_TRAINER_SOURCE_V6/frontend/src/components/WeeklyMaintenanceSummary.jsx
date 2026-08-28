@@ -5,7 +5,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 const EXERCISES = [
   'Flexions', 'Fons', 'Dominades supines', 'Dominades pronades',
   'Pes mort', 'Lunges', 'Sentadilles', 'Abdominals', 'Planxa',
-  'Elevacions de cames penjat', 'Burpees',
+  'Elevacions de cames penjat', 'Burpees', 'SLAM ball',
 ];
 
 const GRAPH_SECTIONS = {
@@ -103,7 +103,7 @@ function TrainingGraph({ series }) {
 
 export default function WeeklyMaintenanceSummary({ sessions }) {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [graph, setGraph] = useState('manteniment');
+  const [graph, setGraph] = useState('all');
   const [portalHost, setPortalHost] = useState(null);
 
   const week = useMemo(() => {
@@ -139,7 +139,7 @@ export default function WeeklyMaintenanceSummary({ sessions }) {
   useEffect(() => {
     const main = document.querySelector('main');
     if (!main) return undefined;
-    const wanted = new Set(GRAPH_SECTIONS[graph] || []);
+    const wanted = graph === 'all' ? null : new Set(GRAPH_SECTIONS[graph] || []);
     const sections = Array.from(main.querySelectorAll('section'));
     const original = new Map();
     sections.forEach((section) => {
@@ -147,7 +147,7 @@ export default function WeeklyMaintenanceSummary({ sessions }) {
       const managed = Object.values(GRAPH_SECTIONS).flat().includes(heading);
       if (!managed) return;
       original.set(section, section.style.display);
-      section.style.display = wanted.has(heading) ? '' : 'none';
+      section.style.display = !wanted || wanted.has(heading) ? '' : 'none';
     });
     return () => original.forEach((value, section) => { section.style.display = value; });
   }, [graph]);
@@ -157,9 +157,10 @@ export default function WeeklyMaintenanceSummary({ sessions }) {
     <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div><p className="text-xs font-bold tracking-widest text-slate-400">GRÀFIQUES</p><h2 className="mt-1 text-lg font-extrabold">Què vols veure?</h2></div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">1 vista</span>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">{graph === 'all' ? 'Totes' : '1 vista'}</span>
       </div>
       <select value={graph} onChange={(event) => setGraph(event.target.value)} className="mt-3 min-h-[52px] w-full rounded-2xl border border-slate-300 bg-white px-4 text-base font-extrabold text-slate-800">
+        <option value="all">Totes les gràfiques</option>
         <option value="manteniment">Manteniment</option>
         <option value="estructural">Estructural</option>
         <option value="pressbanca">Press banca</option>
