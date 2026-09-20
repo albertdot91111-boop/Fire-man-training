@@ -4,18 +4,17 @@ import { ArrowRight, Award, CalendarDays, Clock3, Flame, Settings, ShieldCheck, 
 import { Link } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import pb from '@/lib/pocketbaseClient';
-import { TYPES, levelFor, nextLevel, streak, totalPoints, formatTime, gradeForBench, gradeForTime } from '@/lib/btData';
+import { TYPES, levelFor, nextLevel, streak, totalPoints, formatTime, gradeForTime } from '@/lib/btData';
 
 const ADMIN_EMAIL = 'albertdot91@gmail.com';
 const SPORT_META = [
-    ['forestal', 'Forestal'],
-    ['estructural', 'Estructural'],
-    ['pressbanca', 'Press banca'],
-    ['aquatic', 'Aquàtica'],
+    ['forestal', 'Incendi de vegetació'],
+    ['estructural', 'Incendi estructural'],
+    ['aquatic', 'Rescat aquàtic'],
 ];
-const PREPARATION_TYPES = new Set(['forestal', 'estructural']);
+const PREPARATION_TYPES = new Set(['forestal', 'estructural', 'aquatic']);
 const TIMED_TYPES = new Set(['forestal', 'estructural', 'aquatic']);
-const FORESTAL_EXERCISE = 'circuit complet';
+const FORESTAL_EXERCISES = ['1. Fase 1 · 8 rectes + 16 llançaments', '2. Fase 2 · 10 rectes + 20 llançaments', '3. Fase 3 · 12 rectes + 24 llançaments'];
 
 function initials(record) {
     const name = String(record?.name || record?.fullName || record?.username || '').trim();
@@ -38,68 +37,25 @@ function parseStoredSeconds(value) {
     return Number.isFinite(minutes) && minutes > 0 ? minutes * 60 : 0;
 }
 function sessionScore(session, type) {
+    if (!TIMED_TYPES.has(type)) return null;
+    if (Number.isFinite(Number(session?.physicalGrade))) return Number(session.physicalGrade);
     const data = Array.isArray(session?.data) ? session.data : [];
-    if (type === 'pressbanca') {
-        const e = data.find((x) => String(x?.exercici || '').trim().toLowerCase() === 'press banca');
-        if (!e) return null;
-        const weight = Number(e.pes) || 0;
-        const reps = Number(e.reps ?? e.repeticions) || 0;
-        const time = Number(e.temps) || 0;
-        if (weight <= 0 || reps <= 0 || time <= 0) return null;
-        return gradeForBench(weight, reps, time);
-    }
-    if (TIMED_TYPES.has(type)) {
-        if (type === 'forestal') {
-            const complete = data.find((x) => String(x?.exercici || '').trim().toLowerCase() === FORESTAL_EXERCISE);
-            if (!complete) return null;
-            const tram1 = parseStoredSeconds(complete.tram1);
-            const tram2 = parseStoredSeconds(complete.tram2);
-            const tram3 = parseStoredSeconds(complete.tram3);
-            const completed = Number(complete.tramsCompletats) || [tram1, tram2, tram3].filter((x) => x > 0).length;
-            if (completed !== 3 || tram1 <= 0 || tram2 <= 0 || tram3 <= 0) return null;
-            return gradeForTime(type, tram1 + tram2 + tram3);
-        }
-        const seconds = data.reduce((sum, x) => sum + parseStoredSeconds(x?.temps), 0);
-        return seconds > 0 ? gradeForTime(type, seconds) : null;
-    }
-    return null;
+    const seconds = data.reduce((sum, x) => sum + parseStoredSeconds(x?.temps), 0);
+    return seconds > 0 ? gradeForTime(type, seconds, session?.baremCategory || 'resta') : null;
 }
 
 function forestalProgress(sessions) {
-    const rows = sessions
-        .filter((s) => String(s?.type || '').toLowerCase() === 'forestal')
-        .map((session) => {
-            const data = Array.isArray(session?.data) ? session.data : [];
-            const circuit = data.find((x) => String(x?.exercici || '').trim().toLowerCase() === FORESTAL_EXERCISE);
-            if (!circuit) return null;
-            return {
-                date: String(session.date || '').slice(0, 10),
-                tram1: parseStoredSeconds(circuit.tram1),
-                tram2: parseStoredSeconds(circuit.tram2),
-                tram3: parseStoredSeconds(circuit.tram3),
-                tram1Percent: Number(circuit.tram1Percentatge) || 0,
-                tram2Percent: Number(circuit.tram2Percentatge) || 0,
-                tram3Percent: Number(circuit.tram3Percentatge) || 0,
-            };
-        })
-        .filter(Boolean);
-
-    // El perfil no es reinicia cada dia: conserva l'últim registre disponible de cada tram.
-    const latest = (tram) => rows.find((row) => row[tram] > 0) || null;
-    const r1 = latest('tram1');
-    const r2 = latest('tram2');
-    const r3 = latest('tram3');
-    const trams = [
-        { label: 'T1', time: r1?.tram1 || 0, percent: r1?.tram1Percent || 0, date: r1?.date || '' },
-        { label: 'T2', time: r2?.tram2 || 0, percent: r2?.tram2Percent || 0, date: r2?.date || '' },
-        { label: 'T3', time: r3?.tram3 || 0, percent: r3?.tram3Percent || 0, date: r3?.date || '' },
-    ];
-    const completed = trams.filter((tram) => tram.time > 0).length;
-    const totalSeconds = completed === 3 ? trams.reduce((sum, tram) => sum + tram.time, 0) : 0;
-    const globalGrade = completed === 3 ? gradeForTime('forestal', totalSeconds) : null;
-    const lastDate = rows[0]?.date || '';
-    return { trams, completed, totalSeconds, globalGrade, lastDate };
+    const rows = sessions.filter((session) => String(session?.type || '').toLowerCase() === 'forestal').map((session) => {
+        const data = Array.isArray(session?.data) ? session.data : [];
+        const trams = FORESTAL_EXERCISES.map((name) => parseStoredSeconds(data.find((x) => String(x?.exercici || '').trim().toLowerCase() === name.toLowerCase())?.temps));
+        const complete = trams.every((x) => x > 0);
+        return { date: String(session.date || '').slice(0, 10), trams, complete, globalGrade: complete ? Number(session.physicalGrade ?? gradeForTime('forestal', trams.reduce((sum, value) => sum + value, 0), session.baremCategory || 'resta')) : null };
+    }).filter(Boolean);
+    const latest = rows[0];
+    const trams = (latest?.trams || [0, 0, 0]).map((time, i) => ({ label: `F${i + 1}`, time, percent: 0, date: latest?.date || '' }));
+    return { trams, completed: trams.filter((item) => item.time > 0).length, totalSeconds: trams.reduce((sum, item) => sum + item.time, 0), globalGrade: latest?.globalGrade ?? null, lastDate: latest?.date || '' };
 }
+
 
 export default function ProfilePage() {
     const [sessions, setSessions] = useState([]);
@@ -158,7 +114,7 @@ export default function ProfilePage() {
         <section className="rounded-[2rem] bg-white border border-slate-200 shadow-sm overflow-hidden"><div className="p-5 sm:p-6"><div className="flex items-center gap-4"><div className="h-16 w-16 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-xl font-black shadow-sm">{initials(record)}</div><div className="min-w-0 flex-1"><p className="text-xs font-bold tracking-[0.18em] text-slate-400">OPOSITOR BOMBER</p><h2 className="mt-1 text-2xl font-black truncate">{record.name || record.username || 'El meu perfil'}</h2><p className="text-sm text-slate-500 truncate">{record.email || 'Perfil personal'}</p></div><Link to="/configuracio" aria-label="Configuració" className="h-10 w-10 shrink-0 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600"><Settings className="h-5 w-5" /></Link></div><div className="mt-6 rounded-2xl bg-slate-50 p-4"><div className="flex items-end justify-between gap-3"><div><p className="text-xs font-bold tracking-widest text-slate-400">NIVELL</p><p className="mt-1 text-2xl font-black">{level.name}</p></div><div className="text-right"><p className="text-xs text-slate-500">{next ? `${next.min - points} punts per ${next.name}` : 'Nivell màxim'}</p><p className="text-sm font-extrabold">{points} punts</p></div></div><div className="mt-3 h-2 rounded-full bg-slate-200 overflow-hidden"><div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${progressToNext}%` }} /></div></div></div></section>
         {isAdmin && <section className="rounded-3xl border border-amber-200 bg-amber-50 shadow-sm p-5"><div className="flex items-center gap-3"><div className="h-11 w-11 rounded-xl bg-slate-900 text-white flex items-center justify-center"><ShieldCheck className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="text-xs font-bold tracking-widest text-amber-700">ADMINISTRADOR</p><h2 className="mt-1 text-lg font-black text-slate-900">Panell d’administració</h2><p className="mt-1 text-sm text-slate-600">Consulta els usuaris i l’historial d’inicis de sessió. Aquesta opció només apareix al compte administrador.</p></div><Link to="/admin/accessos" className="shrink-0 rounded-xl bg-slate-900 px-4 py-3 text-sm font-extrabold text-white hover:bg-slate-800">Veure accessos</Link></div></section>}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[[CalendarDays, activeDays, 'dies actius'],[Clock3, formatTime(totalSeconds), 'temps entrenant'],[Flame, `${streak(sessions)} dies`, 'ratxa actual'],[Trophy, sessions.filter((s) => s.type !== 'descans').length, 'sessions registrades']].map(([Icon, value, label]) => <div key={label} className="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm"><Icon className="h-5 w-5 text-slate-400" /><p className="mt-2 text-xl font-black">{value}</p><p className="text-xs font-bold text-slate-400 uppercase tracking-wide">{label}</p></div>)}</section>
-        <section className="rounded-3xl bg-white border border-slate-200 shadow-sm p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">LES MEVES DADES</p><h2 className="mt-1 text-lg font-black">Resum d’entrenament</h2></div><UserRound className="h-5 w-5 text-slate-300" /></div><p className="mt-2 text-xs text-slate-400">Temps i dies acumulats: només proves forestal i estructural. Les altres activitats es conserven a l’historial però no inflen aquests comptadors.</p><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-400">DISTÀNCIA</p><p className="mt-1 text-xl font-black">{totalKm ? `${totalKm.toFixed(1)} km` : '—'}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-400">MILLOR PRESS BANCA</p><p className="mt-1 text-xl font-black">{bestBench ? `${bestBench} kg` : '—'}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-400">PES ACTUAL</p><p className="mt-1 text-xl font-black">{latestWeight?.weight ? `${latestWeight.weight} kg` : '—'}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-400">OBJECTIUS</p><p className="mt-1 text-xl font-black">{goals.length}</p></div></div></section>
+        <section className="rounded-3xl bg-white border border-slate-200 shadow-sm p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">LES MEVES DADES</p><h2 className="mt-1 text-lg font-black">Resum d’entrenament</h2></div><UserRound className="h-5 w-5 text-slate-300" /></div><p className="mt-2 text-xs text-slate-400">Temps i dies acumulats de les tres simulacions físiques oficials de la 81/26.</p><div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-400">DISTÀNCIA</p><p className="mt-1 text-xl font-black">{totalKm ? `${totalKm.toFixed(1)} km` : '—'}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-400">SIMULACIONS 81/26</p><p className="mt-1 text-xl font-black">{sessions.filter((session) => TIMED_TYPES.has(session.type)).length}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-400">PES ACTUAL</p><p className="mt-1 text-xl font-black">{latestWeight?.weight ? `${latestWeight.weight} kg` : '—'}</p></div><div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold text-slate-400">OBJECTIUS</p><p className="mt-1 text-xl font-black">{goals.length}</p></div></div></section>
         <section className="rounded-3xl bg-white border border-slate-200 shadow-sm p-5"><div className="flex items-center justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">PROVES</p><h2 className="mt-1 text-lg font-black">Estat de preparació</h2></div><Target className="h-5 w-5 text-slate-300" /></div><div className="mt-4 space-y-2">
             {SPORT_META.map(([type, label]) => {
                 const last = lastByType[type];
@@ -168,7 +124,7 @@ export default function ProfilePage() {
                     const complete = forestal.completed === 3;
                     return <div key={type} className={`rounded-2xl p-3 border-2 ${complete ? 'border-green-500 bg-green-50/40' : 'border-red-500 bg-red-50/30'}`}>
                         <div className="flex items-center gap-3"><span className="h-9 w-9 rounded-xl flex items-center justify-center text-xs font-black text-white" style={{ background: color }}>{TYPES[type]?.short?.slice(0, 2)}</span><div className="min-w-0 flex-1"><p className="font-extrabold text-sm">{label}</p><p className="text-xs text-slate-500">{forestal.lastDate ? `Últim registre: ${forestal.lastDate}` : 'Encara sense registres'}</p></div><div className="text-right"><p className={`text-xs font-black ${complete ? 'text-green-600' : 'text-red-600'}`}>{complete ? `GLOBAL ${forestal.globalGrade?.toFixed(1)}/10` : `Pendent · ${forestal.completed}/3 trams`}</p>{complete && <p className="text-[10px] font-semibold text-green-600">{Math.round(forestal.globalGrade * 10)}%</p>}</div></div>
-                        <div className="mt-3 grid grid-cols-3 gap-2">{forestal.trams.map((tram) => <div key={tram.label} className={`rounded-xl border-2 p-2 text-center ${tram.time > 0 ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}`}><p className="text-[10px] font-black text-slate-500">{tram.label}</p><p className={`text-sm font-black ${tram.time > 0 ? 'text-green-600' : 'text-red-600'}`}>{tram.time > 0 ? `${tram.percent || 0}%` : 'PENDENT'}</p><p className="text-[10px] font-semibold text-slate-500">{tram.time > 0 ? formatTime(tram.time) : '—'}</p></div>)}</div>
+                        <div className="mt-3 grid grid-cols-3 gap-2">{forestal.trams.map((tram) => <div key={tram.label} className={`rounded-xl border-2 p-2 text-center ${tram.time > 0 ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}`}><p className="text-[10px] font-black text-slate-500">{tram.label}</p><p className={`text-sm font-black ${tram.time > 0 ? 'text-green-600' : 'text-red-600'}`}>{tram.time > 0 ? formatTime(tram.time) : 'PENDENT'}</p><p className="text-[10px] font-semibold text-slate-500">{tram.time > 0 ? formatTime(tram.time) : '—'}</p></div>)}</div>
                         {!complete && forestal.completed > 0 && <p className="mt-2 text-xs font-bold text-red-600">La prova global NO es calcula fins que els 3 trams estiguin completats.</p>}
                     </div>;
                 }
