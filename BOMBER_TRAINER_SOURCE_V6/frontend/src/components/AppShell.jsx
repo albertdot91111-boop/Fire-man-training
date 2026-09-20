@@ -82,7 +82,7 @@ export default function AppShell({ title, children }) {
                     })}
                 </div>
             </nav>
-            <PersonalCalendarOverlay />
+            <div className="mx-auto max-w-3xl px-4 pb-3 flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-semibold text-slate-400"><Link to="/legal/privacitat">Privacitat</Link><Link to="/legal/condicions">Condicions d'ús</Link><Link to="/legal/cookies">Cookies</Link></div><PersonalCalendarOverlay />
         </div>
     );
 }
