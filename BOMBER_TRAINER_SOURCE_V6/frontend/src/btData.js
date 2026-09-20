@@ -119,7 +119,9 @@ export function parseTime(value) {
     return Number.isFinite(minutes) ? minutes * 60 : 0;
 }
 
-export const PRESS_BENCH_TARGET = { weightKg: 65, reps: 20, timeSeconds: 45 }; // legacy 81/25 only\n\nexport function gradeForBench(weight, reps, timeSeconds) {
+export const PRESS_BENCH_TARGET = { weightKg: 65, reps: 20, timeSeconds: 45 }; // legacy 81/25 only
+
+export function gradeForBench(weight, reps, timeSeconds) {
     const kg = Number(weight) || 0;
     const repetitions = Number(reps) || 0;
     const time = Number(timeSeconds);
