@@ -5,7 +5,7 @@ const SECOND_WINDOW_HOURS = 6;
 
 export const COACH_OPTIONS = [
     { key: 'circuit', label: '🏃 CIRCUIT', type: 'forestal', to: '/entrena/forestal', detail: 'Circuit forestal / resistència' },
-    { key: 'pit', label: '💪 PIT', type: 'pressbanca', to: '/entrena/pressbanca', detail: 'Press banca i tren superior' },
+    { key: 'aquatic', label: '🌊 RESCAT AQUÀTIC', type: 'aquatic', to: '/entrena/aquatic', detail: 'Apnea · flotació · salvament · remolc' },
     { key: 'manteniment', label: '🔧 MANTENIMENT', type: 'manteniment', to: '/entrena/manteniment', detail: 'Manteniment curt i útil' },
 ];
 
