@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, LineChart, Bot, UserRound } from 'lucide-react';
+import { Home, LineChart, Bot, UserRound, Apple } from 'lucide-react';
 import pb from '@/lib/pocketbaseClient';
 import PersonalCalendarOverlay from '@/components/PersonalCalendarOverlay';
 
 const NAV = [
     { to: '/', label: 'Inici', Icon: Home },
     { to: '/progres', label: 'Progrés', Icon: LineChart },
+    { to: '/nutricio', label: 'Nutrició', Icon: Apple },
     { to: '/ia', label: 'IA', Icon: Bot },
     { to: '/perfil', label: 'Perfil', Icon: UserRound, profile: true },
 ];
@@ -66,7 +67,7 @@ export default function AppShell({ title, children }) {
             </header>
             <main className="mx-auto max-w-3xl px-4 py-6 space-y-6">{children}</main>
             <nav className="fixed bottom-0 inset-x-0 z-20 bg-white border-t border-slate-200">
-                <div className="mx-auto max-w-3xl grid grid-cols-4">
+                <div className="mx-auto max-w-3xl grid grid-cols-5">
                     {NAV.map(({ to, label, Icon, profile: isProfile }) => {
                         const active = pathname === to;
                         return (
