@@ -6,12 +6,15 @@ const CONSENT_KEY = 'bt-legal-consent-v2';
 const LEGAL_VERSION = '2026-09-20';
 
 export function hasLegalConsent() {
-  try { try {\n    const saved = JSON.parse(localStorage.getItem(CONSENT_KEY) || 'null');\n    return saved?.status === 'accepted' && saved?.version === LEGAL_VERSION && Boolean(saved?.acceptedAt);\n  } catch { return false; } } catch { return false; }
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONSENT_KEY) || 'null');
+    return saved?.status === 'accepted' && saved?.version === LEGAL_VERSION && Boolean(saved?.acceptedAt);
+  } catch { return false; }
 }
 
 export default function LegalConsentGate({ onAccepted }) {
   const [terms, setTerms] = useState(false);
-  const [privacy, setPrivacy] = useState(false);\n  const [cookies, setCookies] = useState(false);
+  const [privacy, setPrivacy] = useState(false);
 
   const accept = () => {
     if (!terms || !privacy) return;
