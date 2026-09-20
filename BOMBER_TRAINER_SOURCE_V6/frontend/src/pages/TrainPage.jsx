@@ -66,9 +66,9 @@ export default function TrainPage() {
     const forestalTotalSeconds = useMemo(() => forestalTrams.reduce((sum, seconds) => sum + seconds, 0), [forestalTrams]);
     const penaltyCount = Math.max(0, Number(penalties) || 0);
     const penaltySeconds = isOfficialPhysical ? penaltyCount * (PHYSICAL_PENALTY_SECONDS[t.key] || 0) : 0;
-    const officialSeconds = isOfficialPhysical ? officialPhysicalTime(t.key, isForestal ? forestalTotalSeconds : isStructural ? structuralTotalSeconds : aquaticTotalSeconds, penaltyCount) : 0;
     const structuralTotalSeconds = useMemo(() => isStructural ? entries.reduce((sum, entry) => sum + (entry?.mode === 'training' ? 0 : parseTrainingTime(entry?.temps)), 0) : 0, [entries, isStructural]);
     const aquaticTotalSeconds = useMemo(() => isAquatic ? entries.reduce((sum, entry) => sum + (entry?.mode === 'training' ? 0 : parseTrainingTime(entry?.temps)), 0) : 0, [entries, isAquatic]);
+    const officialSeconds = isOfficialPhysical ? officialPhysicalTime(t.key, isForestal ? forestalTotalSeconds : isStructural ? structuralTotalSeconds : aquaticTotalSeconds, penaltyCount) : 0;
     const pressBenchSeconds = isPressBench ? Number(entries[0]?.temps) || 0 : 0;
     const pressBenchGrade = useMemo(() => {
         if (!isPressBench) return null;
