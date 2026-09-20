@@ -1,11 +1,12 @@
 export const TYPES = {
-    estructural: { key: 'estructural', label: 'Incendi estructural', short: 'ESTRUCTURAL', color: '#dc2626', soft: '#fee2e2' },
-    forestal: { key: 'forestal', label: 'Incendi forestal', short: 'FORESTAL', color: '#ea580c', soft: '#ffedd5' },
-    aquatic: { key: 'aquatic', label: 'Prova aquàtica', short: 'AQUÀTICA', color: '#0284c7', soft: '#e0f2fe' },
-    pressbanca: { key: 'pressbanca', label: 'Press banca', short: 'PRESS BANCA', color: '#7c3aed', soft: '#ede9fe' },
+    estructural: { key: 'estructural', label: 'Incendi estructural', short: 'ESTRUCTURAL', color: '#dc2626', soft: '#fee2e2', official: true },
+    forestal: { key: 'forestal', label: 'Incendi de vegetació', short: 'VEGETACIÓ', color: '#ea580c', soft: '#ffedd5', official: true },
+    aquatic: { key: 'aquatic', label: 'Rescat aquàtic', short: 'RESCAT AQUÀTIC', color: '#0284c7', soft: '#e0f2fe', official: true },
     manteniment: { key: 'manteniment', label: 'Manteniment', short: 'MANTENIMENT', color: '#ca8a04', soft: '#fef9c3' },
     rapid: { key: 'rapid', label: 'Entrenament ràpid', short: 'RÀPID', color: '#d97706', soft: '#fef3c7' },
     descans: { key: 'descans', label: 'Dia no disponible', short: 'NO DISPONIBLE', color: '#64748b', soft: '#f1f5f9' },
+    // Legacy only: kept so old sessions remain readable.
+    pressbanca: { key: 'pressbanca', label: 'Històric · Press banca', short: 'HISTÒRIC', color: '#7c3aed', soft: '#ede9fe', legacy: true },
 };
 
 export const MATERIAL = [
@@ -14,27 +15,27 @@ export const MATERIAL = [
 ];
 
 export const PLANS = {
-    estructural: [
-        { name: '1. Discos (transport)', detail: '2 discos de 10 kg · equilibri + 10 step-ups', fields: ['temps', 'descans'] },
-        { name: '2. Kettlebells', detail: '2 kettlebells de 16 kg · configuració fixa del projecte', fields: ['temps', 'descans'] },
-        { name: '3. Trineu', detail: '10 m estirar + 10 m empènyer', fields: ['temps', 'descans'] },
-        { name: '4. Recorregut en C', detail: 'Recorregut sota tanques', fields: ['temps', 'descans'] },
-        { name: '5. Arrossegament de maniquí', detail: 'Ninot de 50 kg · configuració fixa del projecte', fields: ['temps', 'descans'] },
-        { name: '6. Esprint final', detail: '10 m', fields: ['temps', 'descans'] },
-    ],
     forestal: [
-        { name: 'TRAM 1', detail: 'Bloc INEFC: 8 x 20 m + 16 slam balls', fields: ['temps', 'descans'] },
-        { name: 'TRAM 2', detail: 'Bloc INEFC: 10 x 20 m + 20 slam balls', fields: ['temps', 'descans'] },
-        { name: 'TRAM 3', detail: 'Bloc INEFC: 12 x 20 m + 24 slam balls', fields: ['temps', 'descans'] },
-        { name: 'CIRCUIT COMPLET', detail: 'Els 3 blocs seguits · temps total i temps de cada bloc', fields: ['temps', 'tram1', 'tram2', 'tram3'] },
+        { name: '1. Fase 1 · 8 rectes + 16 llançaments', detail: '8 rectes de 20 m + 16 llançaments de pilota medicinal de 6 kg', fields: ['temps'] },
+        { name: '2. Fase 2 · 10 rectes + 20 llançaments', detail: '10 rectes de 20 m + 20 llançaments de pilota medicinal de 6 kg', fields: ['temps'] },
+        { name: '3. Fase 3 · 12 rectes + 24 llançaments', detail: '12 rectes de 20 m + 24 llançaments de pilota medicinal de 6 kg', fields: ['temps'] },
+    ],
+    estructural: [
+        { name: '1. Discos + equilibri + calaix', detail: 'Armilla 10 kg · 2 discos de 10 kg · 40 m · barra d’equilibri 3 m · 10 pujades/baixades al calaix', fields: ['temps'] },
+        { name: '2. Pesos russos + calaix', detail: 'Armilla 10 kg · 2 pesos russos de 12 kg · 40 m · 10 pujades/baixades al calaix', fields: ['temps'] },
+        { name: '3. Estirar trineu', detail: 'Armilla 10 kg · trineu de 96 kg · estirada amb corda', fields: ['temps'] },
+        { name: '4. Empènyer trineu', detail: 'Armilla 10 kg · trineu de 96 kg · empènyer 10 m', fields: ['temps'] },
+        { name: '5. Recorregut en C', detail: 'Uns 10 m sota tanques de 91 cm · reptant o en quadrupèdia', fields: ['temps'] },
+        { name: '6. Arrossegament de maniquí', detail: 'Maniquí de 50 kg · 18 m · primers 9 m en ziga-zaga', fields: ['temps'] },
+        { name: '7. Esprint final', detail: 'Cursa de 9 m fins als cons finals', fields: ['temps'] },
     ],
     aquatic: [
-        { name: '1. Entrada segura', detail: 'Peus primer, cap fora i contacte visual', fields: ['temps'] },
-        { name: '2. Apnea', detail: '15 m sota tanca', fields: ['temps'] },
-        { name: '3. Batuda / bicicleta', detail: '30 s amb cap i mans fora', fields: ['temps'] },
-        { name: '4. Estil lliure sota corxeres', detail: '25 m anada + 25 m tornada · tocant paret i sense viratge', fields: ['temps'] },
-        { name: '5. Crol de salvament', detail: '25 m amb cap fora excepte al pas de corxeres', fields: ['temps'] },
-        { name: '6. Remolc de maniquí', detail: '25 m · vies aèries fora excepte al pas de corxeres · extracció completa', fields: ['temps'] },
+        { name: '1. Entrada segura', detail: 'Entrada de peus · cap fora de l’aigua', fields: ['temps'] },
+        { name: '2. Apnea', detail: '15 m en immersió completa · pas sota tanca d’1 m', fields: ['temps'] },
+        { name: '3. Flotació', detail: '30 s · cap i els 10 dits visibles · sense tocar res', fields: ['temps'] },
+        { name: '4. Estil lliure', detail: 'Dos trams · sota surades · tocar paret amb les mans · sense viratge ni impuls', fields: ['temps'] },
+        { name: '5. Crol de salvament', detail: '25 m amb el cap fora de l’aigua', fields: ['temps'] },
+        { name: '6. Remolc de maniquí', detail: '25 m · maniquí de 35 kg · vies aèries fora de l’aigua', fields: ['temps'] },
     ],
     manteniment: [
         { name: 'Dominades', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
@@ -43,12 +44,8 @@ export const PLANS = {
         { name: 'Sentadilla', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
         { name: 'Pes mort', detail: 'Repeticions per sèrie · sense material', fields: ['series'] },
     ],
-    rapid: [
-        { name: 'Circuit ràpid', detail: 'Adaptat als minuts disponibles', fields: ['temps'] },
-    ],
-    pressbanca: [
-        { name: 'Press banca', detail: 'Registra pes, repeticions i temps de la prova', fields: ['pes', 'reps', 'temps'] },
-    ],
+    rapid: [{ name: 'Circuit ràpid', detail: 'Adaptat als minuts disponibles', fields: ['temps'] }],
+    pressbanca: [{ name: 'Press banca · històric', detail: 'Només per consultar registres antics; ja no és prova 81/26.', fields: ['pes', 'reps', 'temps'] }],
     descans: [],
 };
 
@@ -56,14 +53,46 @@ export const INCIDENTS = ['Caiguda', 'Fatiga', 'Dolor', 'Material insuficient', 
 export const POINTS = { complet: 100, manteniment: 40, minim: 20 };
 
 export const PHYSICAL_BAREMS = {
-    forestal: { 0: 280, 1: 270, 2: 260, 3: 250, 4: 240, 5: 230, 6: 220, 7: 210, 8: 205, 9: 200, 10: 190 },
-    estructural: { 0: 230, 1: 220, 2: 210, 3: 200, 4: 190, 5: 180, 6: 170, 7: 160, 8: 150, 9: 140, 10: 130 },
-    aquatic: { 0: 280, 1: 270, 2: 260, 3: 250, 4: 240, 5: 230, 6: 220, 7: 210, 8: 205, 9: 200, 10: 190 },
+    // Each array is [maximum seconds for grade], from 10 down to 0.5; 0 starts at the next second.
+    resta: {
+        forestal: [200,216,227,233,239,245,251,257,263,269,275,281,287,293,299,305,311,317,323,329],
+        estructural: [86,102,113,119,125,131,137,143,149,155,161,167,173,179,185,191,197,203,209,215],
+        aquatic: [128,144,155,161,167,173,179,185,191,197,203,209,215,221,227,233,239,245,251,257],
+    },
+    dones: {
+        forestal: [236,252,263,269,275,281,287,293,299,305,311,317,323,329,335,341,347,353,359,365],
+        estructural: [128,144,155,161,167,173,179,185,191,197,203,209,215,221,227,233,239,245,251,257],
+        aquatic: [152,168,179,185,191,197,203,209,215,221,227,233,239,245,251,257,263,269,275,281],
+    },
 };
 
-export const PRESS_BENCH_TARGET = { weightKg: 65, reps: 20, timeSeconds: 45 };
-export const STRUCTURAL_PROVISIONAL_TOTAL_SECONDS = 130;
-export const STRUCTURAL_PROVISIONAL_EXERCISE_SECONDS = STRUCTURAL_PROVISIONAL_TOTAL_SECONDS / 6;
+export const PHYSICAL_PENALTY_SECONDS = { forestal: 10, estructural: 5, aquatic: 10 };
+export const PHYSICAL_GRADES = [10,9.5,9,8.5,8,7.5,7,6.5,6,5.5,5,4.5,4,3.5,3,2.5,2,1.5,1,0.5,0];
+
+export function gradeForTime(type, totalSeconds, category = 'resta') {
+    const table = PHYSICAL_BAREMS[category]?.[type] || PHYSICAL_BAREMS.resta?.[type];
+    const time = Number(totalSeconds);
+    if (!table || !Number.isFinite(time) || time <= 0) return null;
+    for (let i = 0; i < table.length; i += 1) {
+        if (time <= table[i]) return PHYSICAL_GRADES[i];
+    }
+    return 0;
+}
+
+export function physicalAverage(grades) {
+    const valid = grades.map(Number).filter(Number.isFinite);
+    if (valid.length !== 3) return null;
+    return Math.round((valid.reduce((sum, value) => sum + value, 0) / 3) * 10) / 10;
+}
+
+export function officialPhysicalTime(type, rawSeconds, penalties = 0) {
+    const raw = Number(rawSeconds) || 0;
+    const count = Math.max(0, Number(penalties) || 0);
+    return raw + count * (PHYSICAL_PENALTY_SECONDS[type] || 0);
+}
+
+export const LEGACY_PHYSICAL_TYPES = ['pressbanca'];
+export const OFFICIAL_PHYSICAL_TYPES = ['forestal', 'estructural', 'aquatic'];
 
 export function formatTime(totalSeconds) {
     const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
