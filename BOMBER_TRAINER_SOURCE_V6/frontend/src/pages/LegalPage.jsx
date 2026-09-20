@@ -10,7 +10,7 @@ function Section({ title, children }) {
 
 function Privacy() {
   return <><Section title="Informació bàsica de protecció de dades">
-    <p><strong>Responsable del tractament:</strong> Albert Dit Canadell (NIF/DNI: 47794279A).</p>
+    <p><strong>Responsable del tractament:</strong> Albert Dit Canadell (NIF/DNI: 47794279A). <strong>Contacte:</strong> albertdot91@gmail.com.</p>
     <p><strong>Finalitats:</strong> crear i gestionar el compte; autenticar l'usuari; guardar i sincronitzar entrenaments, progressos, objectius i dades introduïdes voluntàriament; prestar les funcions de l'app; mantenir la seguretat i prevenir usos indeguts.</p>
     <p><strong>Categories de dades:</strong> dades identificatives i de contacte del compte, dades d'autenticació i dades d'entrenament que l'usuari decideixi introduir, com ara temps, repeticions, pesos, objectius, pes corporal o observacions.</p>
     <p><strong>Base jurídica:</strong> execució del servei/relació amb l'usuari per a les dades necessàries per prestar l'app; obligacions legals quan correspongui; i consentiment quan una finalitat concreta requereixi consentiment. El consentiment serà específic, informat, revocable i separable d'altres assumptes.</p>
