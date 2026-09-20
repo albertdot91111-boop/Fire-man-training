@@ -9,7 +9,7 @@ const EXERCISES=[
  {name:'Sentadilla frontal (Front Squat)',series:4,reps:12,sources:'Sessió 4'},
  {name:'Peso muerto rumano',series:4,reps:12,sources:'Sessió 4'},
  {name:'Marxa del granger amb KB',series:4,reps:40,sources:'Sessió 4',unit:'seg'},
- {name:'Rack Chin (TRX)',series:4,reps:12,sources:'Sessió 5'},
+
  {name:'Peso muerto amb barra hexagonal (Trap Bar)',series:4,reps:5,sources:'Sessió 10',rest:120,note:'PES MAX (REGISTRAR)'},
  {name:'Dominades',series:4,reps:4,sources:'Sessió 10',rest:120,note:'LASTRE'},
  {name:'Landmine unilateral en lunge',series:4,reps:6,sources:'Sessió 10',rest:120,note:'PES MAX (REGISTRAR)'},
@@ -18,7 +18,7 @@ const EXERCISES=[
  {name:'Peso muerto con barra',series:4,reps:5,sources:'Sessió 17',rest:120,note:'PES MAX (REGISTRAR)'},
  {name:'Flexiones',series:4,reps:4,sources:'Sessió 17',rest:120,note:'LASTRE'},
  {name:'Squat búlgara',series:4,reps:8,sources:'Sessió 17',rest:120,note:'PES MAX (REGISTRAR)'},
- {name:'Remo TRX con kettlebell',series:4,reps:6,sources:'Sessió 17',unit:'costat',rest:120,note:'PES MIG REGISTRA'},
+
  {name:'Core con fitball',series:3,reps:10,sources:'Sessió 17',rest:30},
  {name:'Activació flexors de maluc + core amb goma',series:3,reps:5,sources:'Sessió 17',unit:'costat',rest:30}
 ];
