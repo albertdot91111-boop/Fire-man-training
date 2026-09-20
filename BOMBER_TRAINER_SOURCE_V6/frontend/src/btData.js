@@ -119,30 +119,7 @@ export function parseTime(value) {
     return Number.isFinite(minutes) ? minutes * 60 : 0;
 }
 
-export function gradeForTime(type, totalSeconds) {
-    const barem = PHYSICAL_BAREMS[type];
-    const time = Number(totalSeconds);
-    if (!barem || !Number.isFinite(time) || time <= 0) return null;
-    if (type === 'estructural' && time < 90) {
-        return Math.round(Math.min(10, (STRUCTURAL_PROVISIONAL_EXERCISE_SECONDS / time) * 10) * 10) / 10;
-    }
-    const grades = Object.keys(barem).map(Number).sort((a, b) => a - b);
-    if (time <= barem[10]) return 10;
-    if (time >= barem[0]) return 0;
-    for (let i = 0; i < grades.length - 1; i += 1) {
-        const lowGrade = grades[i];
-        const highGrade = grades[i + 1];
-        const slow = barem[lowGrade];
-        const fast = barem[highGrade];
-        if (time <= slow && time >= fast) {
-            const ratio = (slow - time) / (slow - fast);
-            return Math.round((lowGrade + ratio * (highGrade - lowGrade)) * 10) / 10;
-        }
-    }
-    return 0;
-}
-
-export function gradeForBench(weight, reps, timeSeconds) {
+export const PRESS_BENCH_TARGET = { weightKg: 65, reps: 20, timeSeconds: 45 }; // legacy 81/25 only\n\nexport function gradeForBench(weight, reps, timeSeconds) {
     const kg = Number(weight) || 0;
     const repetitions = Number(reps) || 0;
     const time = Number(timeSeconds);
