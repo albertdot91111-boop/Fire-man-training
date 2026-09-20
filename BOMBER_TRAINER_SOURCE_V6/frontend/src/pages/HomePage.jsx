@@ -3,15 +3,14 @@ import Helmet from 'react-helmet';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import pb from '@/lib/pocketbaseClient';
-import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints, today, gradeForBench, gradeForTime, formatTime } from '@/lib/btData';
+import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints, today, gradeForTime, formatTime } from '@/lib/btData';
 import { diagnoseBomberProgress } from '@/aiEngine';
 import { COACH_OPTIONS, chooseCoachOption, getCoachMotivation, getTodayCoachState, markCoachCompleted, markCoachUnavailable, nextCoachCheckMs, requestCoachNotifications, shouldCoachPrompt, showCoachNotification } from '@/lib/dailyCoachReminder';
 
 const TODAY_ACTIONS = [
     { label: '🔥 ESPECÍFIC', to: '/entrena/estructural', type: 'estructural', detail: 'Incendi estructural · 16 kg + ninot 50 kg' },
     { label: '🌲 ESPECÍFIC', to: '/entrena/forestal', type: 'forestal', detail: 'Incendi forestal' },
-    { label: '🌊 AQUÀTICA', to: '/entrena/aquatic', type: 'aquatic', detail: 'Prova INEFC · apnea · salvament · remolc' },
-    { label: '🏋️ PRESS BANCA', to: '/entrena/pressbanca', type: 'pressbanca', detail: 'Pes · repeticions · sèries' },
+    { label: '🌊 RESCAT AQUÀTIC', to: '/entrena/aquatic', type: 'aquatic', detail: 'Apnea · flotació · crol de salvament · remolc' },
     { label: '🟡 MANTENIMENT', to: '/entrena/manteniment', type: 'manteniment', detail: 'Tria 5, 10, 15 o 20 min i registra manualment el que facis' },
     { label: '⏸️ AVUI NO PUC ENTRENAR', to: '/entrena/descans', type: 'descans', detail: 'Registra el dia' },
 ];
@@ -31,8 +30,8 @@ function benchProgress(sessions) {
     return { ...best, percent: Math.round(Math.max(0, Math.min(100, best.grade * 10))) };
 }
 
-const STRUCTURAL_EXERCISES = ['1. Discos (transport)', '2. Kettlebells', '3. Trineu', '4. Recorregut en C', '5. Arrossegament de maniquí', '6. Esprint final'];
-const AQUATIC_EXERCISES = ['1. Entrada segura', '2. Apnea', '3. Batuda / bicicleta', '4. Estil lliure sota corxeres', '5. Crol de salvament', '6. Remolc de maniquí'];
+const STRUCTURAL_EXERCISES = ['1. Discos + equilibri + calaix', '2. Pesos russos + calaix', '3. Estirar trineu', '4. Empènyer trineu', '5. Recorregut en C', '6. Arrossegament de maniquí', '7. Esprint final'];
+const AQUATIC_EXERCISES = ['1. Entrada segura', '2. Apnea', '3. Flotació', '4. Estil lliure', '5. Crol de salvament', '6. Remolc de maniquí'];
 
 function parseProgressSeconds(value) {
     if (typeof value === 'number') return value > 0 ? value : 0;
@@ -71,9 +70,16 @@ function latestTimedSummary(sessions, type) {
 }
 
 function physicalProgress(sessions, type) {
-    const targets = { estructural: 130, aquatic: 190 };
+    const targets = { estructural: 0, aquatic: 0, forestal: 0 };
     const target = targets[type];
-    if (!target) return null;
+    if (type === 'forestal') {
+        const latest = sessions.find((s) => s.type === 'forestal' && Number(s.physicalGrade) >= 0);
+        return latest && Number.isFinite(Number(latest.physicalGrade)) ? Math.round(Number(latest.physicalGrade) * 10) : null;
+    }
+    if (!target) {
+        const latest = sessions.find((s) => s.type === type && Number(s.physicalGrade) >= 0);
+        return latest && Number.isFinite(Number(latest.physicalGrade)) ? Math.round(Number(latest.physicalGrade) * 10) : null;
+    }
     const completeCheck = type === 'estructural' ? isCompleteStructuralSession : isCompleteAquaticSession;
     const rows = sessions.filter((s) => String(s?.type || '').trim().toLowerCase() === type).filter(completeCheck).map((s) => {
         const data = Array.isArray(s?.data) ? s.data : [];
@@ -103,15 +109,10 @@ function latestWearableSummary(sessions) {
 function ForestalHomeProgress({ sessions }) {
     const session = sessions.find((s) => String(s?.type || '').trim().toLowerCase() === 'forestal');
     const data = Array.isArray(session?.data) ? session.data : [];
-    const circuit = data.find((e) => String(e?.exercici || '').trim().toUpperCase() === 'CIRCUIT COMPLET') || {};
-    const trams = [
-        { label: 'T1', time: Number(circuit.tram1) || 0, percent: Number(circuit.tram1Percentatge) || 0 },
-        { label: 'T2', time: Number(circuit.tram2) || 0, percent: Number(circuit.tram2Percentatge) || 0 },
-        { label: 'T3', time: Number(circuit.tram3) || 0, percent: Number(circuit.tram3Percentatge) || 0 },
-    ];
+    const names = ['1. Fase 1 · 8 rectes + 16 llançaments', '2. Fase 2 · 10 rectes + 20 llançaments', '3. Fase 3 · 12 rectes + 24 llançaments'];
+    const trams = names.map((name, i) => { const e = data.find((x) => String(x?.exercici || '').trim().toLowerCase() === name.toLowerCase()); const time = Number(e?.temps) || 0; return { label: `F${i + 1}`, time, percent: 0 }; });
     const completed = trams.filter((tram) => tram.time > 0).length;
-    const totalSeconds = trams.reduce((sum, tram) => sum + tram.time, 0);
-    const globalPercent = completed === 3 ? Math.round(Math.max(0, Math.min(100, gradeForTime('forestal', totalSeconds) * 10))) : 0;
+    const globalPercent = completed === 3 && session && Number.isFinite(Number(session.physicalGrade)) ? Math.round(Number(session.physicalGrade) * 10) : 0;
     return <div className="mt-2 rounded-xl bg-white/75 p-2 ring-1 ring-black/5">
         <div className="grid grid-cols-4 gap-1.5">
             {trams.map((tram) => <div key={tram.label} className="rounded-lg bg-orange-50 px-2 py-1.5 text-center"><p className="text-[10px] font-bold text-slate-500">{tram.label}</p><p className="text-sm font-extrabold text-slate-900">{tram.percent}%</p><p className="text-[10px] font-medium text-slate-500">{tram.time > 0 ? formatTime(tram.time) : '—'}</p></div>)}
@@ -140,7 +141,7 @@ function StructuralHomeProgress({ sessions, percent, color }) {
             </div>)}
         </div>
         <div className="mt-1.5 flex items-center justify-between rounded-lg bg-slate-100 px-2 py-1">
-            <span className="text-[9px] font-bold text-slate-500">GLOBAL · {completed}/6</span>
+            <span className="text-[9px] font-bold text-slate-500">GLOBAL · {completed}/7</span>
             <span className="text-xs font-extrabold" style={{ color }}>{globalPercent}%</span>
         </div>
     </div>;
@@ -221,12 +222,9 @@ export default function HomePage() {
     const progressByType = useMemo(() => {
         const map = {};
         diagnosis.tests.forEach((test) => { map[test.type] = test.readiness?.progress ?? null; });
-        ['estructural', 'forestal', 'aquatic'].forEach((type) => { if (type === 'forestal') { map[type] = null; return; } map[type] = physicalProgress(sessions, type); });
-        map.pressbanca = benchProgress(sessions)?.percent ?? null;
+        ['estructural', 'forestal', 'aquatic'].forEach((type) => { map[type] = physicalProgress(sessions, type); });
         return map;
     }, [diagnosis, sessions]);
-    const bench = useMemo(() => benchProgress(sessions), [sessions]);
-
     return (
         <AppShell title="INICI">
             <Helmet><title>Inici — BOMBER TRAINER</title><meta name="description" content="Entrenaments i progrés diari per a opositors de Bombers." /></Helmet>
@@ -234,7 +232,7 @@ export default function HomePage() {
             {!hasTodayTraining && !coachPrompt && !manualCoachOpen && <button type="button" onClick={openCoachManually} className="w-full rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-4 text-left shadow-sm"><span className="block text-xs font-bold tracking-[0.18em] text-yellow-700">ENTRENADOR DIARI</span><span className="mt-1 block text-lg font-extrabold">🔥 Obrir entrenador ara</span><span className="mt-1 block text-sm text-slate-600">No cal esperar la notificació.</span></button>}
             {hasTodayTraining && <section className="rounded-3xl border border-green-200 bg-green-50 p-5 shadow-sm"><p className="text-xs font-bold tracking-[0.18em] text-green-700">AVUI FET</p><h2 className="mt-1 text-xl font-extrabold">🔥 Molt bé. Sessió registrada.</h2><p className="mt-2 text-sm font-medium text-slate-700">{currentStreak > 1 ? `Ratxa activa: ${currentStreak} dies seguits. No la trenquis.` : 'Primera passa feta. Demà tornem-hi.'}</p></section>}
             <section className="grid grid-cols-3 gap-3" aria-label="Resum de progrés">{[['PUNTS', points], ['RATXA', `${currentStreak} d`], ['NIVELL', level.name]].map(([label, value]) => <div key={label} className="rounded-3xl bg-white border border-slate-200 p-4 text-center shadow-sm"><p className="text-xs font-bold tracking-widest text-slate-400">{label}</p><p className="mt-1 text-lg font-extrabold">{value}</p></div>)}</section>
-            <section aria-labelledby="today-actions-heading"><div className="mb-3"><p className="text-xs font-bold tracking-[0.18em] text-slate-400">PUNT DE PARTIDA</p><h2 id="today-actions-heading" className="mt-1 text-xl font-extrabold tracking-tight">Tria una acció per començar</h2></div><div className="grid gap-2 sm:grid-cols-2">{TODAY_ACTIONS.map(({ label, to, type, detail }) => { const t = TYPES[type]; const pct = progressByType[type]; const showProgress = ['estructural', 'aquatic', 'pressbanca'].includes(type); return <Link key={to} to={to} aria-label={label} data-testid={`link-today-action-${type}`} className="group flex min-h-[88px] flex-col justify-between rounded-2xl border border-black/5 p-3 text-left shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900" style={{ backgroundColor: t.soft, borderLeft: `6px solid ${t.color}` }}><div className="flex items-start justify-between gap-2"><p className="text-base font-extrabold leading-tight tracking-tight">{label}</p>{showProgress && <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-xs font-extrabold" style={{ color: t.color }}>{pct === null || pct === undefined ? '—' : `${pct}%`}</span>}</div><p className="mt-1 text-[10px] font-semibold leading-tight" style={{ color: t.color }}>{detail}</p>{type === 'forestal' && <ForestalHomeProgress sessions={sessions}/>} {type === 'estructural' && <CompactTimedProgress sessions={sessions} type="estructural" percent={pct} color={t.color}/>} {type === 'aquatic' && <CompactTimedProgress sessions={sessions} type="aquatic" percent={pct} color={t.color}/>} {type === 'pressbanca' && <CompactBenchProgress bench={bench}/>} {showProgress && pct !== null && pct !== undefined && type !== 'pressbanca' && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/70"><div className="h-1 rounded-full" style={{ width: `${pct}%`, backgroundColor: t.color }}/></div>}</Link>; })}</div></section>
+            <section aria-labelledby="today-actions-heading"><div className="mb-3"><p className="text-xs font-bold tracking-[0.18em] text-slate-400">PUNT DE PARTIDA</p><h2 id="today-actions-heading" className="mt-1 text-xl font-extrabold tracking-tight">Tria una acció per començar</h2></div><div className="grid gap-2 sm:grid-cols-2">{TODAY_ACTIONS.map(({ label, to, type, detail }) => { const t = TYPES[type]; const pct = progressByType[type]; const showProgress = ['estructural', 'forestal', 'aquatic'].includes(type); return <Link key={to} to={to} aria-label={label} data-testid={`link-today-action-${type}`} className="group flex min-h-[88px] flex-col justify-between rounded-2xl border border-black/5 p-3 text-left shadow-sm transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.985] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-900" style={{ backgroundColor: t.soft, borderLeft: `6px solid ${t.color}` }}><div className="flex items-start justify-between gap-2"><p className="text-base font-extrabold leading-tight tracking-tight">{label}</p>{showProgress && <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-xs font-extrabold" style={{ color: t.color }}>{pct === null || pct === undefined ? '—' : `${pct}%`}</span>}</div><p className="mt-1 text-[10px] font-semibold leading-tight" style={{ color: t.color }}>{detail}</p>{type === 'forestal' && <ForestalHomeProgress sessions={sessions}/>} {type === 'estructural' && <CompactTimedProgress sessions={sessions} type="estructural" percent={pct} color={t.color}/>} {type === 'aquatic' && <CompactTimedProgress sessions={sessions} type="aquatic" percent={pct} color={t.color}/>} {showProgress && pct !== null && pct !== undefined && <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/70"><div className="h-1 rounded-full" style={{ width: `${pct}%`, backgroundColor: t.color }}/></div>}</Link>; })}</div></section>
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><div className="flex items-end justify-between"><div><p className="text-xs font-bold tracking-widest text-slate-400">RESUM</p><p className="text-xl font-extrabold">La teva preparació</p></div><div className="text-right"><p className="text-xs font-bold tracking-widest text-slate-400">SESSIONS</p><p className="text-xl font-extrabold">{sessions.length}</p></div></div><p className="mt-3 text-sm font-medium text-slate-600">{motivation}</p>{wearableSummary && <p className="mt-2 text-xs font-semibold text-slate-500">Última activitat sincronitzada ({wearableSummary.date}): {wearableSummary.text}</p>}</section>
             <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><h2 className="text-lg font-extrabold">Punts febles detectats</h2>{weak.length === 0 ? <p className="mt-2 text-sm text-slate-500">Tot treballat aquesta setmana. Continua acumulant feina útil.</p> : <ul className="mt-3 space-y-2">{weak.map((w) => <li key={w.type} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3"><span className="font-semibold">{TYPES[w.type].label}</span><span className="text-sm text-slate-500">{w.days === null ? 'mai registrat' : `fa ${w.days} dies`}</span></li>)}</ul>}</section>
         </AppShell>
