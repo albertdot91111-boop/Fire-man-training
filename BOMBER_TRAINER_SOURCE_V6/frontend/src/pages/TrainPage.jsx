@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
 import StructuralExerciseGraphic from '@/components/StructuralExerciseGraphic';
-import { INCIDENTS, PLANS, POINTS, TYPES, formatTime, gradeForBench, gradeForTime, parseTime, today } from '@/lib/btData';
+import { INCIDENTS, PLANS, POINTS, TYPES, formatTime, gradeForBench, gradeForTime, officialPhysicalTime, PHYSICAL_PENALTY_SECONDS, today } from '@/lib/btData';
 
 const MAINTENANCE_MINUTES = [5, 10, 15, 20];
 const MAINTENANCE_SERIES = 4;
@@ -42,16 +42,17 @@ export default function TrainPage() {
     const isStructural = t.key === 'estructural';
     const isAquatic = t.key === 'aquatic';
     const isPressBench = t.key === 'pressbanca';
+    const isOfficialPhysical = ['forestal', 'estructural', 'aquatic'].includes(t.key);
     const selectedDate = searchParams.get('date');
     const sessionDate = /^\d{4}-\d{2}-\d{2}$/.test(selectedDate || '') ? selectedDate : today();
     const initialDuration = isMaintenance ? (searchParams.get('durada') || '5') : '';
     const maintenancePlan = isMaintenance ? [...plan.filter((p) => !/gambad/i.test(p.name)), { name: 'Slam ball', detail: 'Llançaments al terra · registra repeticions per sèrie.' }, { name: 'Pujada i baixada de caixa (step-up)', detail: 'Pujar i baixar la caixa de fusta · registra repeticions per sèrie.' }] : plan;
     const activePlan = isMaintenance ? maintenancePlan : plan;
     const [duration, setDuration] = useState(initialDuration);
-    const [entries, setEntries] = useState(() => activePlan.map(() => isMaintenance ? { series: Array(MAINTENANCE_SERIES).fill('') } : { mode: 'official' }));
+    const [entries, setEntries] = useState(() => activePlan.map((p, i) => isMaintenance ? { series: Array(MAINTENANCE_SERIES).fill('') } : { mode: 'official', ...(isAquatic && i === 2 ? { temps: '30' } : {}) }));
     const [exerciseNames, setExerciseNames] = useState(() => activePlan.map((p) => p.name));
     const [maintenanceWeights, setMaintenanceWeights] = useState(() => activePlan.map(() => ''));
-    const [incidents, setIncidents] = useState([]); const [notes, setNotes] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const navigate = useNavigate();
+    const [incidents, setIncidents] = useState([]); const [notes, setNotes] = useState(''); const [penalties, setPenalties] = useState('0'); const [baremCategory, setBaremCategory] = useState(() => localStorage.getItem('bt_physical_category') || 'resta'); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const navigate = useNavigate();
     const setField = (i, field, value) => setEntries((prev) => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e));
     const setExerciseMode = (i, mode) => setEntries((prev) => prev.map((e, idx) => idx === i ? { ...e, mode } : e));
     const setMaintenanceSeries = (exerciseIndex, seriesIndex, value) => setEntries((prev) => prev.map((entry, index) => { if (index !== exerciseIndex) return entry; const series = Array.isArray(entry.series) ? [...entry.series] : Array(MAINTENANCE_SERIES).fill(''); series[seriesIndex] = value; return { ...entry, series }; }));
@@ -59,12 +60,13 @@ export default function TrainPage() {
     const setExerciseName = (i, value) => setExerciseNames((prev) => prev.map((n, j) => j === i ? value : n));
     const setMaintenanceWeight = (i, value) => setMaintenanceWeights((prev) => prev.map((w, j) => j === i ? value : w));
     const toggleIncident = (name) => setIncidents((prev) => prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]);
-    const canSwitchMode = (p) => !isMaintenance && !isPressBench && !(isForestal && p.name === 'CIRCUIT COMPLET');
+    const canSwitchMode = (p) => !isMaintenance && !isPressBench;
     const forestalTrams = useMemo(() => isForestal ? entries.slice(0, 3).map((entry) => entry?.mode === 'training' ? 0 : parseTrainingTime(entry?.temps)) : [0, 0, 0], [entries, isForestal]);
     const forestalCompletedTrams = forestalTrams.filter((seconds) => seconds > 0).length;
     const forestalTotalSeconds = useMemo(() => forestalTrams.reduce((sum, seconds) => sum + seconds, 0), [forestalTrams]);
-    const forestalTramTargets = [48, 60, 72];
-    const forestalTramPercentages = forestalTrams.map((seconds, index) => seconds > 0 ? Math.min(100, Math.round((forestalTramTargets[index] / seconds) * 100)) : null);
+    const penaltyCount = Math.max(0, Number(penalties) || 0);
+    const penaltySeconds = isOfficialPhysical ? penaltyCount * (PHYSICAL_PENALTY_SECONDS[t.key] || 0) : 0;
+    const officialSeconds = isOfficialPhysical ? officialPhysicalTime(t.key, isForestal ? forestalTotalSeconds : isStructural ? structuralTotalSeconds : aquaticTotalSeconds, penaltyCount) : 0;
     const structuralTotalSeconds = useMemo(() => isStructural ? entries.reduce((sum, entry) => sum + (entry?.mode === 'training' ? 0 : parseTrainingTime(entry?.temps)), 0) : 0, [entries, isStructural]);
     const aquaticTotalSeconds = useMemo(() => isAquatic ? entries.reduce((sum, entry) => sum + (entry?.mode === 'training' ? 0 : parseTrainingTime(entry?.temps)), 0) : 0, [entries, isAquatic]);
     const pressBenchSeconds = isPressBench ? Number(entries[0]?.temps) || 0 : 0;
@@ -78,34 +80,21 @@ export default function TrainPage() {
     const forestalComplete = isForestal && forestalCompletedTrams === 3;
     const structuralComplete = isStructural && entries.every((entry) => entry?.mode !== 'training' && parseTrainingTime(entry?.temps) > 0);
     const aquaticComplete = isAquatic && entries.every((entry) => entry?.mode !== 'training' && parseTrainingTime(entry?.temps) > 0);
-    const forestalGrade = forestalComplete ? gradeForTime('forestal', forestalTotalSeconds) : null;
-    const structuralGrade = structuralComplete ? gradeForTime('estructural', structuralTotalSeconds) : null;
-    const aquaticGrade = aquaticComplete ? gradeForTime('aquatic', aquaticTotalSeconds) : null;
+    const forestalGrade = forestalComplete ? gradeForTime('forestal', officialSeconds, baremCategory) : null;
+    const structuralGrade = structuralComplete ? gradeForTime('estructural', officialSeconds, baremCategory) : null;
+    const aquaticGrade = aquaticComplete ? gradeForTime('aquatic', officialSeconds, baremCategory) : null;
 
     const save = async (kind) => {
         setBusy(true); setError('');
         try {
-            if (isForestal && kind === 'complet' && !forestalComplete) {
-                setError('La prova forestal no està completa: falta almenys un tram. Guarda-la com a prova parcial.');
+            if (isOfficialPhysical && kind === 'complet' && !(isForestal ? forestalComplete : isStructural ? structuralComplete : aquaticComplete)) {
+                setError('La simulació no està completa. Introdueix totes les fases abans de guardar-la com a prova oficial completa.');
                 return;
             }
             const points = kind === 'complet' ? POINTS.complet : kind === 'manteniment' ? POINTS.manteniment : POINTS.minim;
             const data = activePlan.map((p, i) => {
                 if (!isMaintenance) {
-                    if (isForestal && p.name === 'CIRCUIT COMPLET') return {
-                        exercici: p.name,
-                        mode: 'official',
-                        temps: forestalTotalSeconds,
-                        tram1: forestalTrams[0],
-                        tram2: forestalTrams[1],
-                        tram3: forestalTrams[2],
-                        tram1Percentatge: forestalTramPercentages[0],
-                        tram2Percentatge: forestalTramPercentages[1],
-                        tram3Percentatge: forestalTramPercentages[2],
-                        tramsCompletats: forestalCompletedTrams,
-                        estat: forestalComplete ? 'complet' : 'parcial',
-                        tram3Estat: forestalTrams[2] > 0 ? 'completat' : 'no completat',
-                    };
+                    if (isForestal && p.name === 'CIRCUIT COMPLET') return null;
                     const mode = entries[i]?.mode || 'official';
                     const base = { exercici: p.name, ...entries[i], mode };
                     if (mode === 'training') {
@@ -118,19 +107,15 @@ export default function TrainPage() {
                 return { exercici: exerciseNames[i].trim() || p.name, llastKg: String(maintenanceWeights[i] ?? '').trim(), series: (entries[i]?.series || []).slice(0, MAINTENANCE_SERIES).map((v) => String(v ?? '').trim()) };
             });
             if (isMaintenance && !data.some((e) => e.series.some((v) => v !== ''))) { setError('Registra almenys una sèrie abans de guardar.'); return; }
-            const computedMinutes = isPressBench && pressBenchSeconds > 0
-                ? pressBenchSeconds / 60
-                : isForestal
-                    ? forestalTotalSeconds / 60
-                    : isStructural && structuralTotalSeconds > 0
-                        ? structuralTotalSeconds / 60
-                        : isAquatic && aquaticTotalSeconds > 0
-                            ? aquaticTotalSeconds / 60
-                            : Number(duration) || 0;
-            const finalNotes = isForestal && !forestalComplete
-                ? `${notes ? `${notes} ` : ''}Prova forestal parcial: ${forestalCompletedTrams}/3 trams completats. Tram 3 no completat per cansament.`
-                : notes;
-            await pb.collection('bt_sessions').create({ type: t.key, date: sessionDate, duration: computedMinutes, points: t.key === 'descans' ? 0 : points, incidents: incidents.join(', '), notes: finalNotes, data, owner: pb.authStore.record.id });
+            const computedMinutes = isOfficialPhysical
+                ? officialSeconds / 60
+                : isPressBench && pressBenchSeconds > 0
+                    ? pressBenchSeconds / 60
+                    : Number(duration) || 0;
+            const completePhysical = isOfficialPhysical && (isForestal ? forestalComplete : isStructural ? structuralComplete : aquaticComplete);
+            const physicalGrade = completePhysical ? gradeForTime(t.key, officialSeconds, baremCategory) : null;
+            const finalNotes = notes;
+            await pb.collection('bt_sessions').create({ type: t.key, date: sessionDate, duration: computedMinutes, points: t.key === 'descans' ? 0 : points, incidents: incidents.join(', '), notes: finalNotes, penalties: isOfficialPhysical ? penaltyCount : 0, penaltySeconds: isOfficialPhysical ? penaltySeconds : 0, rawTimeSeconds: isOfficialPhysical ? (officialSeconds - penaltySeconds) : 0, officialTimeSeconds: isOfficialPhysical ? officialSeconds : 0, physicalGrade, baremCategory: isOfficialPhysical ? baremCategory : '', data, owner: pb.authStore.record.id });
             navigate('/progres');
         } catch (err) { setError(err?.message || 'No s\'ha pogut guardar la sessió.'); } finally { setBusy(false); }
     };
@@ -140,7 +125,8 @@ export default function TrainPage() {
         {selectedDate && <div className="mb-4 rounded-2xl bg-blue-50 p-4 text-sm font-bold text-blue-800">Estàs registrant l'entrenament del <strong>{sessionDate}</strong>. La sessió quedarà guardada en aquest dia.</div>}
         <div className="rounded-3xl p-5" style={{ backgroundColor: t.soft, borderLeft: `8px solid ${t.color}` }}><p className="text-xs font-bold tracking-widest" style={{ color: t.color }}>{t.short}</p><p className="mt-1 text-sm font-medium text-slate-700">{isMaintenance ? 'Manteniment flexible. Tria la durada i registra tu mateix què has fet.' : 'Registra el que has fet.'}</p></div>
         {isMaintenance && <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm"><p className="text-xs font-bold tracking-widest text-slate-400">TEMPS DISPONIBLE</p><h2 className="mt-1 text-lg font-extrabold">Tria la durada</h2><div className="mt-3 grid grid-cols-4 gap-2">{MAINTENANCE_MINUTES.map((minutes) => <button key={minutes} type="button" onClick={() => selectMaintenanceMinutes(minutes)} className={`min-h-[56px] rounded-2xl px-2 text-sm font-extrabold ${Number(duration) === minutes ? 'bg-yellow-400 text-slate-900' : 'bg-slate-100 text-slate-700'}`}>{minutes} MIN</button>)}</div><p className="mt-3 text-sm text-slate-500">La durada i el nombre de sèries són independents. Sempre tens 4 opcions de sèrie.</p></section>}
-        {isForestal && <div className="rounded-2xl bg-orange-50 p-4 text-sm font-bold text-orange-800">Trams forestal: <strong>{forestalCompletedTrams}/3 completats</strong>{!forestalComplete && forestalCompletedTrams > 0 ? ' · Pots guardar la prova parcial sense inventar el tram que falta.' : ''}</div>}
+        {isOfficialPhysical && <section className="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold tracking-widest text-slate-400">BAREM 81/26</p><p className="mt-1 text-sm text-slate-600">El DOGC utilitza les columnes «Dones» i «Resta de persones».</p></div><select value={baremCategory} onChange={(e) => { setBaremCategory(e.target.value); localStorage.setItem('bt_physical_category', e.target.value); }} className="min-h-[44px] rounded-xl border border-slate-300 bg-white px-3 text-sm font-extrabold"><option value="resta">Resta de persones</option><option value="dones">Dones</option></select></div></section>}
+        {isOfficialPhysical && <div className="rounded-2xl bg-slate-50 p-4 text-sm font-bold text-slate-800">{isForestal ? 'Vegetació: 3 fases · pilota medicinal 6 kg' : isStructural ? 'Estructural: 7 fases · armilla 10 kg · trineu 96 kg · maniquí 50 kg' : 'Rescat aquàtic: 6 fases · apnea 15 m · flotació 30 s · maniquí 35 kg'}</div>}
         <section className="space-y-3">
             {activePlan.map((p, i) => {
                 const mode = entries[i]?.mode || 'official';
@@ -166,20 +152,20 @@ export default function TrainPage() {
                             {fields.map((f) => <label key={f} className="grid gap-1 text-sm font-semibold">{isPressBench && f === 'temps' ? 'Temps de la prova (s)' : (FIELD_LABELS[f] || f)}<input type={isPressBench && f === 'temps' ? 'number' : (TIME_FIELDS.has(f) ? 'text' : 'number')} inputMode="decimal" value={entries[i]?.[f] ?? ''} onChange={(e) => setField(i, f, e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /></label>)}
                         </div>
                         {mode === 'training' && <p className="mt-2 text-xs font-semibold text-slate-400">Entrenament: no cal posar temps. Queda separat de la prova oficial i no entra al barem de temps.</p>}
-                        {isForestal && i < 3 && mode !== 'training' && <div className="mt-3 rounded-2xl bg-orange-50 p-3"><p className="text-xs font-bold tracking-widest text-orange-600">TRAM {i + 1} · RENDIMENT</p><p className="mt-1 text-lg font-extrabold text-slate-900">{forestalTramPercentages[i] !== null ? `${forestalTramPercentages[i]}%` : 'Introdueix el temps'}</p><p className="mt-1 text-xs text-slate-600">Percentatge orientatiu del tram segons el temps. No és la nota global.</p></div>}
+                        {isForestal && i < 3 && mode !== 'training' && <div className="mt-3 rounded-2xl bg-orange-50 p-3"><p className="text-xs font-bold tracking-widest text-orange-600">FASE {i + 1}</p><p className="mt-1 text-xs text-slate-600">El barem oficial es calcula sobre el temps TOTAL de les 3 fases, més penalitzacions.</p></div>}
                         {isPressBench && <div className="mt-4 rounded-2xl bg-violet-50 p-4"><p className="text-xs font-bold tracking-widest text-violet-600">BAREM PRESS BANCA</p><p className="mt-1 text-2xl font-extrabold text-slate-900">{pressBenchGrade !== null ? `${pressBenchGrade}/10 · ${Math.round(pressBenchGrade * 10)}%` : 'Introdueix pes, repeticions i temps'}</p><p className="mt-1 text-xs text-slate-600">10/10 = 65 kg · 20 repeticions · ≤45 segons</p></div>}
-                        {isStructural && i === activePlan.length - 1 && <div className="mt-4 rounded-2xl bg-red-50 p-4"><p className="text-xs font-bold tracking-widest text-red-600">BAREM ESTRUCTURAL</p><p className="mt-1 text-2xl font-extrabold text-slate-900">{structuralGrade !== null ? `${structuralGrade}/10 · ${Math.round(structuralGrade * 10)}%` : 'Completa els 6 exercicis de la ruta per calcular la nota'}</p><p className="mt-1 text-xs text-slate-600">Només els exercicis en <strong>Prova oficial</strong> entren al temps total i al barem.</p></div>}
-                        {isAquatic && i === activePlan.length - 1 && <div className="mt-4 rounded-2xl bg-sky-50 p-4"><p className="text-xs font-bold tracking-widest text-sky-600">BAREM AQUÀTICA</p><p className="mt-1 text-2xl font-extrabold text-slate-900">{aquaticGrade !== null ? `${aquaticGrade}/10 · ${Math.round(aquaticGrade * 10)}%` : 'Completa els temps de la prova per calcular la nota'}</p><p className="mt-1 text-xs text-slate-600">Només els exercicis en <strong>Prova oficial</strong> entren al temps total.</p></div>}
+                        {isStructural && i === activePlan.length - 1 && <div className="mt-4 rounded-2xl bg-red-50 p-4"><p className="text-xs font-bold tracking-widest text-red-600">BAREM ESTRUCTURAL 81/26</p><p className="mt-1 text-2xl font-extrabold text-slate-900">{structuralGrade !== null ? `${structuralGrade}/10 · ${Math.round(structuralGrade * 10)}%` : 'Completa les 7 fases per calcular la nota'}</p><p className="mt-1 text-xs text-slate-600">Temps oficial: {formatTime(officialSeconds)} · +{penaltySeconds}s de penalitzacions.</p></div>}
+                        {isAquatic && i === activePlan.length - 1 && <div className="mt-4 rounded-2xl bg-sky-50 p-4"><p className="text-xs font-bold tracking-widest text-sky-600">BAREM RESCAT AQUÀTIC 81/26</p><p className="mt-1 text-2xl font-extrabold text-slate-900">{aquaticGrade !== null ? `${aquaticGrade}/10 · ${Math.round(aquaticGrade * 10)}%` : 'Completa les 6 fases per calcular la nota'}</p><p className="mt-1 text-xs text-slate-600">Temps oficial: {formatTime(officialSeconds)} · +{penaltySeconds}s de penalitzacions.</p></div>}
                     </>}
                 </div>;
             })}
         </section>
         <section className="rounded-3xl bg-white border border-slate-200 p-5 shadow-sm space-y-4">
-            {isMaintenance ? <p className="text-sm font-semibold">Durada seleccionada: <strong>{duration} min</strong></p> : isForestal ? <p className="text-sm font-semibold">Durada total: <strong>{formatTime(forestalTotalSeconds)}</strong></p> : isStructural ? <p className="text-sm font-semibold">Temps oficial total: <strong>{formatTime(structuralTotalSeconds)}</strong></p> : isAquatic ? <p className="text-sm font-semibold">Temps oficial total: <strong>{formatTime(aquaticTotalSeconds)}</strong></p> : isPressBench ? <p className="text-sm font-semibold">Temps de la prova: <strong>{formatTime(pressBenchSeconds)}</strong></p> : <label className="grid gap-1 text-sm font-semibold">Durada total (min)<input type="number" step="0.1" value={duration} onChange={(e) => setDuration(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /></label>}
-            <div><p className="text-sm font-semibold">Incidències</p><div className="mt-2 flex flex-wrap gap-2">{INCIDENTS.map((name) => <button key={name} type="button" onClick={() => toggleIncident(name)} className={`min-h-[44px] rounded-xl px-4 text-sm font-semibold ${incidents.includes(name) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}>{name}</button>)}</div></div>
+            {isMaintenance ? <p className="text-sm font-semibold">Durada seleccionada: <strong>{duration} min</strong></p> : isForestal ? <p className="text-sm font-semibold">Temps brut: <strong>{formatTime(forestalTotalSeconds)}</strong> · Oficial: <strong>{formatTime(officialSeconds)}</strong></p> : isStructural ? <p className="text-sm font-semibold">Temps brut: <strong>{formatTime(structuralTotalSeconds)}</strong> · Oficial: <strong>{formatTime(officialSeconds)}</strong></p> : isAquatic ? <p className="text-sm font-semibold">Temps brut: <strong>{formatTime(aquaticTotalSeconds)}</strong> · Oficial: <strong>{formatTime(officialSeconds)}</strong></p> : isPressBench ? <p className="text-sm font-semibold">Temps de la prova: <strong>{formatTime(pressBenchSeconds)}</strong></p> : <label className="grid gap-1 text-sm font-semibold">Durada total (min)<input type="number" step="0.1" value={duration} onChange={(e) => setDuration(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /></label>}
+            <div>{isOfficialPhysical && <label className="grid gap-1 text-sm font-semibold">Penalitzacions oficials <span className="text-xs font-normal text-slate-400">{PHYSICAL_PENALTY_SECONDS[t.key]} s cadascuna</span><input type="number" min="0" step="1" value={penalties} onChange={(e) => setPenalties(e.target.value)} className="min-h-[48px] rounded-xl border border-slate-300 px-3" /></label>}<p className="mt-4 text-sm font-semibold">Incidències</p><div className="mt-2 flex flex-wrap gap-2">{INCIDENTS.map((name) => <button key={name} type="button" onClick={() => toggleIncident(name)} className={`min-h-[44px] rounded-xl px-4 text-sm font-semibold ${incidents.includes(name) ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}>{name}</button>)}</div></div>
             <label className="grid gap-1 text-sm font-semibold">Notes<textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="rounded-xl border border-slate-300 p-3" /></label>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <div className="grid gap-2 sm:grid-cols-3">{!isMaintenance && <button type="button" disabled={busy || (isForestal && !forestalComplete)} onClick={() => save('complet')} className="min-h-[52px] rounded-xl bg-slate-900 font-bold text-white disabled:opacity-40">{isForestal && !forestalComplete ? 'Complet +100 (bloquejat)' : 'Complet +100'}</button>}{isForestal && !forestalComplete && <button type="button" disabled={busy || forestalCompletedTrams === 0} onClick={() => save('minim')} className="min-h-[52px] rounded-xl bg-orange-100 font-bold text-orange-900 disabled:opacity-40">Guardar prova parcial +20</button>}<button type="button" disabled={busy} onClick={() => save('manteniment')} className="min-h-[52px] rounded-xl bg-yellow-400 font-bold text-slate-900">{isMaintenance ? 'Guardar manteniment +40' : 'Manteniment +40'}</button><button type="button" disabled={busy} onClick={() => save('minim')} className="min-h-[52px] rounded-xl bg-slate-100 font-bold text-slate-700">{isMaintenance ? 'Guardar mínim +20' : 'Mínim +20'}</button></div>
+            <div className="grid gap-2 sm:grid-cols-3">{!isMaintenance && <button type="button" disabled={busy || (isForestal && !forestalComplete)} onClick={() => save('complet')} className="min-h-[52px] rounded-xl bg-slate-900 font-bold text-white disabled:opacity-40">{isForestal && !forestalComplete ? 'Complet +100 (bloquejat)' : 'Complet +100'}</button>}{isOfficialPhysical && <button type="button" disabled={busy} onClick={() => save('minim')} className="min-h-[52px] rounded-xl bg-slate-100 font-bold text-slate-700">Guardar entrenament parcial +20</button>}<button type="button" disabled={busy} onClick={() => save('manteniment')} className="min-h-[52px] rounded-xl bg-yellow-400 font-bold text-slate-900">{isMaintenance ? 'Guardar manteniment +40' : 'Manteniment +40'}</button><button type="button" disabled={busy} onClick={() => save('minim')} className="min-h-[52px] rounded-xl bg-slate-100 font-bold text-slate-700">{isMaintenance ? 'Guardar mínim +20' : 'Mínim +20'}</button></div>
         </section>
     </AppShell>;
 }
