@@ -77,7 +77,7 @@ export default function AiPageAuto() {
         return;
       }
       const history=messages.filter(m=>m.content).slice(-40);
-      const r=await fetch(`/api/gemini?_=${Date.now()}`,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:[{type:'text',text}],history,context:contextFor(data)})});
+      const r=await fetch(`/api/gemini?_=${Date.now()}`,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:[{type:'text',text}],history:route.reason === 'Pregunta de coneixement o explicació general.' ? [] : history,context:route.reason === 'Pregunta de coneixement o explicació general.' ? '' : contextFor(data)})});
       const raw=await r.text(); let parsed=null; try{parsed=JSON.parse(raw);}catch{}
       if(!r.ok||!parsed?.answer) throw new Error(parsed?.error||`Error ${r.status}`);
       setMessages(p=>{const c=[...p];c[c.length-1]={role:'assistant',content:parsed.answer,source:parsed.source||'gemini'};return c;});
