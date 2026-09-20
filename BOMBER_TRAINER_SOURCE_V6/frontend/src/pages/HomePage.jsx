@@ -127,16 +127,15 @@ function StructuralHomeProgress({ sessions, percent, color }) {
     const items = STRUCTURAL_EXERCISES.map((name) => {
         const entry = data.find((e) => String(e?.exercici || '').trim().toLowerCase() === name.toLowerCase());
         const time = parseProgressSeconds(entry?.temps);
-        const percentatge = time > 0 ? Math.round(Math.max(0, Math.min(100, gradeForTime('estructural', time) * 10))) : 0;
-        return { label: name.replace(/^\d+\.\s*/, ''), time, percent: percentatge };
+        return { label: name.replace(/^\d+\.\s*/, ''), time };
     });
     const completed = items.filter((item) => item.time > 0).length;
-    const globalPercent = completed === items.length ? (percent ?? 0) : 0;
+    const globalPercent = completed === items.length && session && Number.isFinite(Number(session.physicalGrade)) ? Math.round(Number(session.physicalGrade) * 10) : 0;
     return <div className="mt-2 rounded-xl bg-white/75 p-2 ring-1 ring-black/5">
         <div className="grid grid-cols-3 gap-1.5">
             {items.map((item) => <div key={item.label} className="rounded-lg bg-red-50 px-1.5 py-1 text-center">
                 <p className="truncate text-[9px] font-bold text-slate-500">{item.label}</p>
-                <p className="text-xs font-extrabold text-slate-900">{item.percent}%</p>
+                <p className="text-xs font-extrabold text-slate-900">{item.time > 0 ? formatTime(item.time) : '—'}</p>
                 <p className="text-[9px] font-medium text-slate-500">{item.time > 0 ? formatTime(item.time) : '—'}</p>
             </div>)}
         </div>
@@ -153,8 +152,7 @@ function AquaticHomeProgress({ sessions, percent, color }) {
     const items = AQUATIC_EXERCISES.map((name) => {
         const entry = data.find((e) => String(e?.exercici || '').trim().toLowerCase() === name.toLowerCase());
         const time = parseProgressSeconds(entry?.temps);
-        const percentatge = time > 0 ? Math.round(Math.max(0, Math.min(100, gradeForTime('aquatic', time) * 10))) : 0;
-        return { label: name.replace(/^\d+\.\s*/, ''), time, percent: percentatge };
+        return { label: name.replace(/^\d+\.\s*/, ''), time };
     });
     const completed = items.filter((item) => item.time > 0).length;
     const globalPercent = completed === items.length ? (percent ?? 0) : 0;
