@@ -1,45 +1,30 @@
-import React, { useState } from 'react';
+import React,{useState} from 'react';
 import Helmet from 'react-helmet';
 import AppShell from '@/components/AppShell';
-import plans from '@/lib/trainerPlans.json';
 
-const categoryClass = (category) => {
-  if (category === 'FORÇA') return 'bg-orange-50 border-orange-200';
-  if (category === 'NATACIÓ') return 'bg-sky-50 border-sky-200';
-  if (category === 'CÓRRER') return 'bg-rose-50 border-rose-200';
-  if (category === 'BICI') return 'bg-emerald-50 border-emerald-200';
-  return 'bg-violet-50 border-violet-200';
-};
+const PLANS=JSON.parse(String.raw`[
+{"id":"forca-pit-1","category":"FORÇA","title":"Força · Pit + unilateral","subtitle":"Força general + bloc aeròbic","sections":[{"title":"Força","items":[{"name":"Press banca","target":"4 × 12"},{"name":"Remo mancuerna unilateral","target":"4 × 12"},{"name":"Zancada frontal amb 2 manuelles","target":"4 × 15 passos"}]},{"title":"Bloc aeròbic","items":[{"name":"800 m córrer","target":"3 rondes"},{"name":"1'15\" salt a la corda","target":"3 rondes"},{"name":"15 toes to bar","target":"3 rondes"}]}]},
+{"id":"nadar-1","category":"NATACIÓ","title":"Nadar · Aeròbic + crol","subtitle":"Trote suau + piscina","sections":[{"title":"Objectiu del cardio","items":[{"name":"20 min trote suau","target":""},{"name":"200 m variats","target":"Piscina"},{"name":"4 × 25 crol fort","target":"d/40\" · 3 blocs"},{"name":"100 m suau","target":"Després de cada bloc"},{"name":"300 m molt suau","target":"Variant entre crol, esquena i peus · (A) aletes"}]}]},
+{"id":"correr-intervals-1","category":"CÓRRER","title":"Córrer · Respiració nasal","subtitle":"Treball aeròbic controlat","sections":[{"title":"Objectiu del cardio","items":[{"name":"4 min córrer","target":"Pensant molt en la respiració nasal · 4 rondes"},{"name":"1 min caminar","target":"Després de cada 4 min · 4 rondes"}]}]},
+{"id":"forca-cames-1","category":"FORÇA","title":"Força · Cames + cadena posterior","subtitle":"Força + bloc aeròbic","sections":[{"title":"Força","items":[{"name":"Sentadilla frontal (Front Squat)","target":"4 × 12"},{"name":"Peso muerto rumano","target":"4 × 12"},{"name":"Marxa del granger amb KB","target":"4 × 40\""}]},{"title":"Bloc aeròbic","items":[{"name":"500 m rem aeròbic","target":"3 rondes"},{"name":"20 burpees","target":"3 rondes"},{"name":"20\" battle rope","target":"3 rondes"}]}]},
+{"id":"forca-pit-2","category":"FORÇA","title":"Força · Pit + tracció","subtitle":"Força + bloc aeròbic","sections":[{"title":"Força","items":[{"name":"Press banca","target":"4 × 12"},{"name":"Rack Chin (TRX)","target":"4 × 12"},{"name":"Zancada frontal amb 2 manuelles","target":"4 × 15 passes"}]},{"title":"Bloc aeròbic","items":[{"name":"1000 m córrer","target":"2 rondes"},{"name":"1 min salt a la corda","target":"2 rondes"},{"name":"15 toes to bar","target":"2 rondes"}]}]},
+{"id":"bici-regenerativa","category":"BICI","title":"Ciclisme · Regeneratiu","subtitle":"Volum cardiovascular sense impacte","sections":[{"title":"Objectiu del cardio","items":[{"name":"1 h de bici","target":"Ritme molt fàcil · regeneratiu"}]}]},
+{"id":"test-5k","category":"CÓRRER","title":"Test 5K · Ritme còmode","subtitle":"Test controlat","sections":[{"title":"Objectiu del cardio","items":[{"name":"5 km corrent","target":"Ritme còmode · veure com puja el pols a ritme mitjà · ritme estable · no mirar temps durant, només final · després passar report"}]}]},
+{"id":"circuit-pes-corporal","category":"MANTENIMENT","title":"Circuit · Pes corporal + KB","subtitle":"Circuit curt de manteniment","sections":[{"title":"Circuit","items":[{"name":"Flexions","target":"2 × màxim"},{"name":"Goblet squat","target":"2 × 30\""},{"name":"Dominades","target":"2 × màx. repeticions"},{"name":"Swing","target":"2 × 30\""},{"name":"Planxa 3 suports","target":"2 × 30\""},{"name":"Planxa lateral 2 suports","target":"2 × 30\" × costat"}]}]},
+{"id":"nadar-tecnica-1","category":"NATACIÓ","title":"Nadar · Tècnica i peus","subtitle":"Variats + crol","sections":[{"title":"Objectiu del cardio","items":[{"name":"200 m variat estils","target":""},{"name":"4 × 50 peus de braç","target":"25 peus de braç + 25 crol · d/20\""},{"name":"4 × 25 GRAVAT nedant","target":"1 crol lateral · 1 braç · 1 esquena amb peus de braç · 1 crol per davant · d/1'"}]}]},
+{"id":"forca-base","category":"FORÇA","title":"Força base · Trap Bar + unilateral","subtitle":"Força global","sections":[{"title":"Força Base","items":[{"name":"Peso muerto amb barra hexagonal (Trap Bar)","target":"4 × 5"},{"name":"Dominades","target":"4 × 4"},{"name":"Landmine unilateral en lunge","target":"4 × 6"},{"name":"Remo amb barra en banc · agafada prona","target":"4 × 8"},{"name":"Hip thrust en banc","target":"4 × 8"}]}]},
+{"id":"nadar-apnea","category":"NATACIÓ","title":"Nadar · Apnea + control","subtitle":"Treball específic de piscina","sections":[{"title":"Objectiu del cardio","items":[{"name":"400 m variats","target":""},{"name":"4 × 75 crol","target":"Buscant agafar aigua des de l’inici de la braçada · d/20\""},{"name":"4 × 50 peus (A) (T)","target":"Braços quiets i estirats davant · d/20\" · 2 blocs"},{"name":"4 × 15 m apnea","target":"Tocant el terra als 10 m · acabar piscina nedant · d/1' · 2 blocs"},{"name":"100 suaus","target":"Final"}]}]},
+{"id":"forca-superserie-core","category":"FORÇA","title":"Força · Supersèrie + core","subtitle":"2 rondes","sections":[{"title":"SUPERSET ×2 RONDES","items":[{"name":"90-90 aixecant maluc en OK","target":"5 × costat"},{"name":"Flexor de maluc + peso mort unilateral","target":"5 × costat"},{"name":"Peso mort de genolls i goma","target":"10"},{"name":"Activació de flexors de maluc + core amb goma","target":"10 × costat"}]},{"title":"Test incendi vegetació fase 3","items":[{"name":"12 rectes de 20 m","target":""},{"name":"24 llançaments amb pilota medicinal","target":"6 kg"}]}]},
+{"id":"bici-volum","category":"BICI","title":"Ciclisme · Volum","subtitle":"Sessió fàcil per sumar volum","sections":[{"title":"Objectiu del cardio","items":[{"name":"1 h 30 min de bici","target":"Fàcil · sumar volum cardiovascular sense impacte · ritme fàcil progressant a ritme mig"}]}]}
+]`);
+const categoryClass=(c)=>c==='FORÇA'?'bg-orange-50 border-orange-200':c==='NATACIÓ'?'bg-sky-50 border-sky-200':c==='CÓRRER'?'bg-rose-50 border-rose-200':c==='BICI'?'bg-emerald-50 border-emerald-200':'bg-violet-50 border-violet-200';
 
-export default function TrainerPlansPage() {
-  const [filter, setFilter] = useState('TOTS');
-  const [open, setOpen] = useState('');
-  const categories = ['TOTS', ...Array.from(new Set(plans.map((plan) => plan.category)))];
-  const visible = filter === 'TOTS' ? plans : plans.filter((plan) => plan.category === filter);
-
-  return (
-    <AppShell title="PAUTES ENTRENADOR">
-      <Helmet><title>Pautes de l’entrenador — BOMBER TRAINER</title></Helmet>
-      <section className="rounded-3xl bg-slate-900 p-5 text-white shadow-sm">
-        <p className="text-xs font-black tracking-[0.2em] text-orange-300">PAUTES GUARDADES</p>
-        <h1 className="mt-2 text-2xl font-black">La pauta queda dins l’app.</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-200">Sessions copiades de les pautes facilitades perquè les puguis consultar sempre.</p>
-        <p className="mt-3 text-xs font-bold text-slate-300">{plans.length} sessions guardades</p>
-      </section>
-      <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-        {categories.map((category) => <button key={category} type="button" onClick={() => setFilter(category)} className={`min-h-[44px] shrink-0 rounded-full border px-4 text-xs font-black ${filter === category ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200'}`}>{category}</button>)}
-      </div>
-      <div className="mt-4 space-y-3">
-        {visible.map((plan) => {
-          const expanded = open === plan.id;
-          return <article key={plan.id} className={`overflow-hidden rounded-3xl border shadow-sm ${categoryClass(plan.category)}`}>
-            <button type="button" onClick={() => setOpen(expanded ? '' : plan.id)} className="w-full p-5 text-left">
-              <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black tracking-widest text-slate-500">{plan.category}</p><h2 className="mt-1 text-lg font-black text-slate-900">{plan.title}</h2><p className="mt-1 text-sm font-medium text-slate-600">{plan.subtitle}</p></div><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-xl font-bold">{expanded ? '−' : '+'}</span></div>
-            </button>
-            {expanded && <div className="border-t border-black/5 bg-white/70 p-4">{plan.sections.map((section) => <section key={section.title} className="mb-3 rounded-2xl border border-slate-200 bg-white p-4 last:mb-0"><h3 className="text-sm font-black uppercase tracking-wider text-slate-500">{section.title}</h3><div className="mt-3 space-y-2">{section.items.map((item) => <div key={item.name} className="rounded-xl bg-slate-50 px-3 py-3"><p className="text-sm font-bold text-slate-800">{item.name}</p>{item.target && <p className="mt-1 text-xs font-extrabold text-slate-500">{item.target}</p>}</div>)}</div></section>)}</div>}
-          </article>;
-        })}
-      </div>
-    </AppShell>
-  );
+export default function TrainerPlansPage(){
+ const [filter,setFilter]=useState('TOTS'); const [open,setOpen]=useState('');
+ const categories=['TOTS',...Array.from(new Set(PLANS.map(p=>p.category)))]; const visible=filter==='TOTS'?PLANS:PLANS.filter(p=>p.category===filter);
+ return <AppShell title="PAUTES ENTRENADOR"><Helmet><title>Pautes de l’entrenador — BOMBER TRAINER</title></Helmet>
+  <section className="rounded-3xl bg-slate-900 p-5 text-white shadow-sm"><p className="text-xs font-black tracking-[0.2em] text-orange-300">PAUTES GUARDADES</p><h1 className="mt-2 text-2xl font-black">La pauta queda dins l’app.</h1><p className="mt-2 text-sm leading-6 text-slate-200">Sessions copiades de les pautes facilitades perquè les puguis consultar sempre.</p><p className="mt-3 text-xs font-bold text-slate-300">{PLANS.length} sessions guardades</p></section>
+  <div className="mt-4 flex gap-2 overflow-x-auto pb-1">{categories.map(c=><button key={c} type="button" onClick={()=>setFilter(c)} className={`min-h-[44px] shrink-0 rounded-full border px-4 text-xs font-black ${filter===c?'bg-slate-900 text-white border-slate-900':'bg-white text-slate-600 border-slate-200'}`}>{c}</button>)}</div>
+  <div className="mt-4 space-y-3">{visible.map(plan=>{const expanded=open===plan.id;return <article key={plan.id} className={`overflow-hidden rounded-3xl border shadow-sm ${categoryClass(plan.category)}`}><button type="button" onClick={()=>setOpen(expanded?'':plan.id)} className="w-full p-5 text-left"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black tracking-widest text-slate-500">{plan.category}</p><h2 className="mt-1 text-lg font-black text-slate-900">{plan.title}</h2><p className="mt-1 text-sm font-medium text-slate-600">{plan.subtitle}</p></div><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-xl font-bold">{expanded?'−':'+'}</span></div></button>{expanded&&<div className="border-t border-black/5 bg-white/70 p-4">{plan.sections.map(section=><section key={section.title} className="mb-3 rounded-2xl border border-slate-200 bg-white p-4 last:mb-0"><h3 className="text-sm font-black uppercase tracking-wider text-slate-500">{section.title}</h3><div className="mt-3 space-y-2">{section.items.map(item=><div key={item.name} className="rounded-xl bg-slate-50 px-3 py-3"><p className="text-sm font-bold text-slate-800">{item.name}</p>{item.target&&<p className="mt-1 text-xs font-extrabold text-slate-500">{item.target}</p>}</div>)}</div></section>)}</div>}</article>})}</div>
+ </AppShell>;
 }
