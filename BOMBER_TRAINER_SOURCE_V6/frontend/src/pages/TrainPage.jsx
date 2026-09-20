@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import pb from '@/lib/pocketbaseClient';
 import AppShell from '@/components/AppShell';
 import StructuralExerciseGraphic from '@/components/StructuralExerciseGraphic';
-import { INCIDENTS, PLANS, POINTS, TYPES, formatTime, gradeForBench, gradeForTime, officialPhysicalTime, PHYSICAL_PENALTY_SECONDS, today } from '@/lib/btData';
+import { INCIDENTS, PLANS, POINTS, TYPES, formatTime, gradeForBench, gradeForTime, officialPhysicalTime, PHYSICAL_PENALTY_SECONDS, parseTime, today } from '@/lib/btData';
 
 const MAINTENANCE_MINUTES = [5, 10, 15, 20];
 const MAINTENANCE_SERIES = 4;
