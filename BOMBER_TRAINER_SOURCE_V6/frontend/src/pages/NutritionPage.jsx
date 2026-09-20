@@ -80,7 +80,7 @@ export default function NutritionPage(){
    </button>
    {expanded&&<div className="border-t border-emerald-100 bg-emerald-50/40 p-3 space-y-2">{d.meals.map(([label,text])=><div key={label} className="rounded-2xl bg-white p-3 ring-1 ring-black/5"><p className="text-[10px] font-black tracking-wider text-slate-400">{label}</p><p className="mt-1 text-sm font-semibold leading-5 text-slate-800">{text}</p></div>)}</div>}
   </article>})}</div>
-  <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-lg font-black">Informació del menú</h2><ul className="mt-3 space-y-2">{NOTES.map(n=><li key={n} className="text-sm font-medium leading-5 text-slate-600">• {n}</li>)}</ul></section>
+  <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-lg font-black">Informació de la mostra</h2><ul className="mt-3 space-y-2">{NOTES.map(n=><li key={n} className="text-sm font-medium leading-5 text-slate-600">• {n}</li>)}</ul></section>
   <section className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm"><p className="text-xs font-black tracking-[0.18em] text-violet-700">SUPLEMENTACIÓ ESPORTIVA</p><div className="mt-3 space-y-2">{['Batut proteïna post entreno gimnàs fort','Creatina 7 gr. cada matí en dejú','Intenta arribar a 2 litres d’aigua al dia'].map((x,i)=><div key={x} className="flex gap-3 rounded-2xl bg-white p-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-black text-violet-700">{i+1}</span><p className="text-sm font-bold text-slate-800">{x}</p></div>)}</div></section>
  </AppShell>
 }
