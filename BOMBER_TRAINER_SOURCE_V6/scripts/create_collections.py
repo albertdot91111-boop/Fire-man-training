@@ -36,7 +36,7 @@ def req(method, path, token=None, body=None):
         try: return e.code, json.loads(raw)
         except Exception: return e.code, {"raw": raw}
 
-def owner_field(): return {"name":"owner","type":"relation","required":True,"collectionId":USERS_ID,"cascadeDelete":False,"minSelect":0,"maxSelect":1}
+def owner_field(): return {"name":"owner","type":"relation","required":True,"collectionId":USERS_ID,"cascadeDelete":True,"minSelect":0,"maxSelect":1}
 def relation_field(): return {"name":"relation","type":"relation","required":True,"collectionId":USERS_ID,"cascadeDelete":False,"minSelect":0,"maxSelect":1}
 def text(name): return {"name":name,"type":"text"}
 def number(name): return {"name":name,"type":"number"}
