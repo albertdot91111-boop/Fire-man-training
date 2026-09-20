@@ -3,7 +3,7 @@ import Helmet from 'react-helmet';
 import { Link, useNavigate } from 'react-router-dom';
 import AppShell from '@/components/AppShell';
 import pb from '@/lib/pocketbaseClient';
-import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints, today, gradeForTime, formatTime } from '@/lib/btData';
+import { MOTIVATION, TYPES, levelFor, streak, totalPoints, weakPoints, today, gradeForBench, gradeForTime, formatTime } from '@/lib/btData';
 import { diagnoseBomberProgress } from '@/aiEngine';
 import { COACH_OPTIONS, chooseCoachOption, getCoachMotivation, getTodayCoachState, markCoachCompleted, markCoachUnavailable, nextCoachCheckMs, requestCoachNotifications, shouldCoachPrompt, showCoachNotification } from '@/lib/dailyCoachReminder';
 
