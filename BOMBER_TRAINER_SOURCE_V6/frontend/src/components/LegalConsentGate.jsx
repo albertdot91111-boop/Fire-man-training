@@ -2,19 +2,20 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, FileText, Cookie, Check } from 'lucide-react';
 
-const CONSENT_KEY = 'bt-legal-consent-v1';
+const CONSENT_KEY = 'bt-legal-consent-v2';
+const LEGAL_VERSION = '2026-09-20';
 
 export function hasLegalConsent() {
-  try { return localStorage.getItem(CONSENT_KEY) === 'accepted'; } catch { return false; }
+  try { try {\n    const saved = JSON.parse(localStorage.getItem(CONSENT_KEY) || 'null');\n    return saved?.status === 'accepted' && saved?.version === LEGAL_VERSION && Boolean(saved?.acceptedAt);\n  } catch { return false; } } catch { return false; }
 }
 
 export default function LegalConsentGate({ onAccepted }) {
   const [terms, setTerms] = useState(false);
-  const [privacy, setPrivacy] = useState(false);
+  const [privacy, setPrivacy] = useState(false);\n  const [cookies, setCookies] = useState(false);
 
   const accept = () => {
     if (!terms || !privacy) return;
-    localStorage.setItem(CONSENT_KEY, 'accepted');
+    localStorage.setItem(CONSENT_KEY, JSON.stringify({ status: 'accepted', version: LEGAL_VERSION, acceptedAt: new Date().toISOString(), privacyAcknowledged: true, termsAccepted: true }));
     onAccepted?.();
   };
 
