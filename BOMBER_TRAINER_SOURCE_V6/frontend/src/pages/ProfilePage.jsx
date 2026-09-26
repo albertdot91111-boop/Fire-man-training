@@ -52,7 +52,7 @@ function forestalProgress(sessions) {
         return { date: String(session.date || '').slice(0, 10), trams, complete, globalGrade: complete ? Number(session.physicalGrade ?? gradeForTime('forestal', trams.reduce((sum, value) => sum + value, 0), session.baremCategory || 'resta')) : null };
     }).filter(Boolean);
     const latest = rows[0];
-    const trams = (latest?.trams || [0, 0, 0]).map((time, i) => ({ label: `F${i + 1}`, time, percent: 0, date: latest?.date || '' }));
+    const trams = (latest?.trams || [0, 0, 0]).map((time, i) => ({ label: `F${i + 1}`, time, percent: time > 0 ? 100 : 0, date: latest?.date || '' }));
     return { trams, completed: trams.filter((item) => item.time > 0).length, totalSeconds: trams.reduce((sum, item) => sum + item.time, 0), globalGrade: latest?.globalGrade ?? null, lastDate: latest?.date || '' };
 }
 
