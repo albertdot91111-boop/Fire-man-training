@@ -110,9 +110,18 @@ function ForestalHomeProgress({ sessions }) {
     const session = sessions.find((s) => String(s?.type || '').trim().toLowerCase() === 'forestal');
     const data = Array.isArray(session?.data) ? session.data : [];
     const names = ['1. Fase 1 · 8 rectes + 16 llançaments', '2. Fase 2 · 10 rectes + 20 llançaments', '3. Fase 3 · 12 rectes + 24 llançaments'];
-    const trams = names.map((name, i) => { const e = data.find((x) => String(x?.exercici || '').trim().toLowerCase() === name.toLowerCase()); const time = Number(e?.temps) || 0; return { label: `F${i + 1}`, time, percent: 0 }; });
+    const trams = names.map((name, i) => {
+        const e = data.find((x) => String(x?.exercici || '').trim().toLowerCase() === name.toLowerCase());
+        const time = Number(e?.temps) || 0;
+        // El percentatge de cada fase representa si la fase ja està registrada.
+        // El barem oficial només és aplicable al temps TOTAL de les 3 fases,
+        // per tant no inventem una nota percentual per a una fase aïllada.
+        return { label: `F${i + 1}`, time, percent: time > 0 ? 100 : 0 };
+    });
     const completed = trams.filter((tram) => tram.time > 0).length;
-    const globalPercent = completed === 3 && session && Number.isFinite(Number(session.physicalGrade)) ? Math.round(Number(session.physicalGrade) * 10) : 0;
+    const globalPercent = completed === 3 && session && Number.isFinite(Number(session.physicalGrade))
+        ? Math.round(Number(session.physicalGrade) * 10)
+        : Math.round((completed / 3) * 100);
     return <div className="mt-2 rounded-xl bg-white/75 p-2 ring-1 ring-black/5">
         <div className="grid grid-cols-4 gap-1.5">
             {trams.map((tram) => <div key={tram.label} className="rounded-lg bg-orange-50 px-2 py-1.5 text-center"><p className="text-[10px] font-bold text-slate-500">{tram.label}</p><p className="text-sm font-extrabold text-slate-900">{tram.percent}%</p><p className="text-[10px] font-medium text-slate-500">{tram.time > 0 ? formatTime(tram.time) : '—'}</p></div>)}
